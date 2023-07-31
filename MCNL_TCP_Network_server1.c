@@ -9,16 +9,8 @@
 
 #define BUF_SIZE 1000
 #define NAME_SIZE 256
-/*
-struct dirent
-{
-	long		    d_ino;		
-	unsigned short	d_reclen;	
-	unsigned short	d_namlen;	Length of name in d_name. 
-	char		    d_name[260];  [FILENAME_MAX] */ /* File name. 
-}; 
-*/
-struct file_info {
+
+struct file_info { //패킷 만들기
     char name[NAME_SIZE];
     long size;
 };
@@ -57,25 +49,51 @@ int main(int argc, char *argv[]) {
     clnt_adr_sz = sizeof(clnt_adr);
     clnt_sd = accept(serv_sd, (struct sockaddr *) &clnt_adr, &clnt_adr_sz);
 /*
+struct dirent
+{
+	long		    d_ino;	inode 번호	
+	unsigned short	d_reclen;	
+	unsigned short	d_namlen;	. 
+	char		    d_name[260];  파일 이름 
+}; 
+*/ 
+/*
 DIR *d = opendir("."); // 현재 디렉토리를 열기
 if (d) {
     struct dirent *dir;
-    while ((dir = readdir(d)) != NULL) { // 디렉토리의 각 항목을 읽기
-    이 때, 각 파일에 대한 정보는 struct dirent *dir에 저장됨.
+    while ((dir = readdir(d)) != NULL) { // 디렉토리의 각 항목을 읽기, 반환값 dirent 구조체 포인터
+    이 때, 각 파일에 대한 정보는 struct dirent 구조체에 저장됨.
         printf("%s\n", dir->d_name); // 항목의 이름을 출력하기
-    }
+        }
     closedir(d); // 디렉토리를 닫기
 }
+*/
+/*
+    struct stat buf; //stat 구조체 
+    stat("test.c", &buf); //stat함수 : 첫번째 인자 path/파일명,  stat 구조체 두번째 인자로 주솟값 전송, 해당 첫번째 인자로 들어온 파일 정보를 두번째 인자로 전달된 stat 구조체에 정보 할당. 
+
+    printf("Inode = %d\n", (int)buf.st_ino);
+    printf("Size = %d\n", (int)buf.st_size);
+
+    --> 실행결과: Inode = 15963 Size = 675
 */
     while(1){
         //  파일 목록 보내기
         d = opendir("."); //현재 디렉토리 열기
         if (d) {
             while ((dir = readdir(d)) != NULL) {
-                stat(dir->d_name, &file_stat); //파일 stat에 파일 정보들 저장시키고
+                stat(dir->d_name, &file_stat); //파일 stat에 파일 정보들 저장시키고 (stat 함수는 구조체 stat을  반환하는데, 두번째 인자로 전달한 stat 구조체에 파일정보들을 반환(할당)함. 그 구조체에 멤버로
+                //파일을 관리하기 위한 정보를 담고 있는 inode(파일 권한), off_t st_size (해당 파일 크기)라는 녀석이 있고
+                // 그 inode 정보를 읽을 때 STAT 함수를 통해서 읽을 수 있으며 이 함수를 사용해 읽어오면 반환값으로 두번째 인자로 전달한 주솟값(해당 구조체),
+                //구조체인 STAT이라는 스트럭처(위의 inode, st_size가 멤버를 갖고있는 구조체를 두번째인자에 줌으로서 거기에 자동 할당해줌) 에 자동할당해줌
+                
                 strncpy(file_inf.name, dir->d_name, NAME_SIZE); //파일 인포 구조체에 각 파일명들 복사
                 file_inf.size = file_stat.st_size;//파일 인포 구조체 사이즈에 파일 stat 정보 크기 저장
                 write(clnt_sd, &file_inf, sizeof(file_inf)); //클라이언트에게 전송(파일 인포)
+                //패킷을 만들고 server에서 write(서버소켓의 새로운 소켓, struct 패킷의 주소, 패킷의 사이즈)를 해버리면
+                //client에서 받을때 client에도 패킷을 정의한후 read(내 소켓, client 패킷정의한 구조체 주소, 패킷의 사이즈)하면
+                //패킷을 정의한 구조체 즉, server에서 write한 구조체의 내용들이 client 의 패킷의 구조체 내용들에 다 담겨지게 된다. (자동화가 이루어짐)
+
             }
             // 파일의 목록 끝 표시
             memset(&file_inf, 0, sizeof(file_inf)); //빈파일 구조체 전송(0으로 설정, 파일 목록 끝 표시를 위해)
