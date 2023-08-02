@@ -9,12 +9,16 @@
 
 #define BUF_SIZE 1000
 #define NAME_SIZE 256
-
-struct file_info { //패킷 만들기
+#define PAKETSIZE 264
+struct file_info { //패킷 만들기 //크기 260
     char name[NAME_SIZE];
     long size;
 };
-
+typedef struct 
+{
+    char content[BUF_SIZE];
+    int read_size;
+}pkt;
 void error_handling(char *message);
 
 int main(int argc, char *argv[]) {
@@ -89,38 +93,61 @@ if (d) {
                 
                 strncpy(file_inf.name, dir->d_name, NAME_SIZE); //파일 인포 구조체에 각 파일명들 복사
                 file_inf.size = file_stat.st_size;//파일 인포 구조체 사이즈에 파일 stat 정보 크기 저장
-                write(clnt_sd, &file_inf, sizeof(file_inf)); //클라이언트에게 전송(파일 인포)
+                
+                printf("%ld\n",write(clnt_sd, &file_inf, sizeof(file_inf))); //클라이언트에게 전송(파일 인포)
                 //패킷을 만들고 server에서 write(서버소켓의 새로운 소켓, struct 패킷의 주소, 패킷의 사이즈)를 해버리면
                 //client에서 받을때 client에도 패킷을 정의한후 read(내 소켓, client 패킷정의한 구조체 주소, 패킷의 사이즈)하면
                 //패킷을 정의한 구조체 즉, server에서 write한 구조체의 내용들이 client 의 패킷의 구조체 내용들에 다 담겨지게 된다. (자동화가 이루어짐)
 
             }
             // 파일의 목록 끝 표시
-            memset(&file_inf, 0, sizeof(file_inf)); //빈파일 구조체 전송(0으로 설정, 파일 목록 끝 표시를 위해)
-            write(clnt_sd, &file_inf, sizeof(file_inf));
+             memset(&file_inf, 0, sizeof(file_inf)); //빈파일 구조체 전송(0으로 설정, 파일 목록 끝 표시를 위해)
+             write(clnt_sd, &file_inf, sizeof(file_inf));
+             closedir(d);
         }
 
         // 클라이언트로부터 파일 이름 받기
-        read(clnt_sd, file_inf.name, NAME_SIZE);
+        int str_len=256;
+        int recv_len=0;
+        int recv_cnt;
+        while(recv_len<str_len)
+        {
+            recv_cnt=read(clnt_sd, &file_inf.name[recv_len], NAME_SIZE-1);
+            //printf("%d\n",recv_cnt);
+            if(recv_cnt==-1)
+            error_handling("read() error!");
+            recv_len+=recv_cnt;
+        }
+        file_inf.name[recv_len]=0;
+        
 
         // 클라이언트가 quit하면 break
         if(strcmp(file_inf.name, "quit") == 0){
             break;
         }
 
+        stat(file_inf.name, &file_stat);
+        file_inf.size = file_stat.st_size;
+
+       // printf("size : %ld",file_inf.size);
+       write(clnt_sd, &file_inf, sizeof(file_inf));
         // 해당 파일 클라이언트에게 전송
         fp = fopen(file_inf.name, "rb");
-        while (1) {
-            read_cnt = fread((void *) buf, 1, BUF_SIZE, fp);
+        pkt *packet = malloc(sizeof(pkt));
+         while (1) {
+            memset(packet,0,sizeof(pkt));
+            read_cnt = fread(packet->content, 1, BUF_SIZE, fp);
+            packet->read_size=read_cnt;
+           // printf("read_size : %d", packet->read_size);
             if (read_cnt < BUF_SIZE) {
-                write(clnt_sd, buf, read_cnt);
+                write(clnt_sd, packet, sizeof(pkt));
                 break;
             }
-            write(clnt_sd, buf, BUF_SIZE);
+            write(clnt_sd, packet, sizeof(pkt));
         }
         // 오류 방지 버퍼 지우기 위해 0으로 memset하기
-        memset(buf, 0, BUF_SIZE);
-        write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
+       // memset(buf, 0, BUF_SIZE);
+        //write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
         
         fclose(fp);
     }
