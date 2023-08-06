@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 	char buf[BUF_SIZE];
     char temp_buf[BUF_SIZE];
 	int read_cnt;
-
+    struct stat file_stat; 
 
 	//int str_len;
 	struct sockaddr_in serv_adr;
@@ -56,20 +56,20 @@ int main(int argc, char *argv[])
 		error_handling("connect() error!");
 	else
 		puts("Connected...........");
-while(1)
-{
+
 		fputs("do you want to see the server's directory?(Q to quit || yes || no): ", stdout);
 		fgets(temp_buf, BUF_SIZE, stdin);
 		
 		if(!strcmp(temp_buf,"q\n") || !strcmp(temp_buf,"Q\n") ||!strcmp(temp_buf,"no\n"))
-		break;
+		exit(1);
 
 		write(sd, temp_buf, strlen(temp_buf));
+while(1){    
 	while(1) 
 	{
 		recv_len=0;
         while (recv_len<PAKETSIZE) {
-            recv_cnt=read(sd, &temp[recv_len], PAKETSIZE - recv_len); //파일 목록 수신
+            recv_cnt=read(sd, &temp[recv_len], PAKETSIZE - recv_len); 
             //printf("%d\n",recv_cnt); 여기부분
             if(recv_cnt ==-1)
                 error_handling("read() error!");
@@ -82,7 +82,7 @@ while(1)
         if (file_inf.size == 0) break; //파일 정보 크기 0이면 수신 종료
         }
 		
-		printf("Enter the name of the file you want to download (or 'quit' to exit): ");
+		printf("Enter the name of the file you want to download (or 'quit' to exit), 'cd [dir]' to change dir, 'upload [file]' to upload): ");
         fgets(file_inf.name, NAME_SIZE, stdin); //입력하기
         
         //int str_len=0;
@@ -95,6 +95,53 @@ while(1)
         if(strcmp(file_inf.name, "quit") == 0){
             write(sd, file_inf.name, NAME_SIZE); 
           break;
+        }
+        // cd [dir]입력하면 디렉토리 변경
+        if(strncmp(file_inf.name, "cd ", 3) == 0){
+            write(sd, file_inf.name, NAME_SIZE);
+            continue;
+        }
+
+        // upload [file]입력하면 파일 업로드
+        if(strncmp(file_inf.name, "upload ", 7) == 0)
+        {
+           //write(sd, "upload", NAME_SIZE);
+            write(sd, file_inf.name, NAME_SIZE);
+            int offset = 7; // 7바이트를 제거 (upload 제거)
+            int len = strlen(file_inf.name); 
+
+            if (len > offset) {
+                memmove(file_inf.name, file_inf.name + offset, len - offset + 1); // +1은 널 문자를 포함하기 위함입니다.
+            }
+            stat(file_inf.name, &file_stat);
+            file_inf.size = file_stat.st_size;
+
+            printf("size : %ld",file_inf.size);
+
+            write(sd, &file_inf, sizeof(file_inf)); //해당 이름과 사이즈 패킷을 먼저 보냄
+
+            //해당 파일 서버에게 전송
+            fp = fopen(file_inf.name, "rb");
+           pkt *packet = malloc(sizeof(pkt));
+        while (1)
+        {
+            memset(packet, 0, sizeof(pkt));
+            read_cnt = fread(packet->content, 1, BUF_SIZE, fp);
+            packet->read_size = read_cnt;
+             printf("\nread_size : %d", packet->read_size);
+            if (read_cnt < BUF_SIZE)
+            {
+                write(sd, packet, sizeof(pkt));
+                break;
+            }
+            write(sd, packet, sizeof(pkt));
+        }
+        // 오류 방지 버퍼 지우기 위해 0으로 memset하기
+        // memset(buf, 0, BUF_SIZE);
+        // write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
+        free(packet);
+        fclose(fp);
+            continue;
         }
    
         // 서버에 내가 입력한 파일이름 전송
@@ -158,7 +205,7 @@ while(1)
             }
         }
         fclose(fp); //0값 받으면 다운로드 완료됬다고 표현
-        printf("Download complete\n");
+        printf("downloaded complete\n");
 	
 		
 		
