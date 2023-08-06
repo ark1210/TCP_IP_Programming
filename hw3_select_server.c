@@ -13,7 +13,7 @@
 #define NAME_SIZE 256
 #define PAKETSIZE 264
 struct file_info
-{ // 패킷 만들기 //크기 260
+{ // 패킷 만들기 //크기 264
 	char name[NAME_SIZE];
 	long size;
 };
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	FILE *fp;
 	char buf[BUF_SIZE];
 	int read_cnt;
-
+	char temp[PAKETSIZE];
 	// struct sockaddr_in serv_adr, clnt_adr;
 
 	struct dirent *dir;
@@ -105,88 +105,170 @@ int main(int argc, char *argv[])
 					}
 					else
 					{
-						//  파일 목록 보내기
-						d = opendir("."); // 현재 디렉토리 열기
-						if (d)
-						{
-							while ((dir = readdir(d)) != NULL)
-							{
-								stat(dir->d_name, &file_stat); // 파일 stat에 파일 정보들 저장시키고 (stat 함수는 구조체 stat을  반환하는데, 두번째 인자로 전달한 stat 구조체에 파일정보들을 반환(할당)함. 그 구조체에 멤버로
-								// 파일을 관리하기 위한 정보를 담고 있는 inode(파일 권한), off_t st_size (해당 파일 크기)라는 녀석이 있고
-								//  그 inode 정보를 읽을 때 STAT 함수를 통해서 읽을 수 있으며 이 함수를 사용해 읽어오면 반환값으로 두번째 인자로 전달한 주솟값(해당 구조체),
-								// 구조체인 STAT이라는 스트럭처(위의 inode, st_size가 멤버를 갖고있는 구조체를 두번째인자에 줌으로서 거기에 자동 할당해줌) 에 자동할당해줌
-
-								strncpy(file_inf.name, dir->d_name, NAME_SIZE); // 파일 인포 구조체에 각 파일명들 복사
-								file_inf.size = file_stat.st_size;				// 파일 인포 구조체 사이즈에 파일 stat 정보 크기 저장
-
-								printf("%ld\n", write(i, &file_inf, sizeof(file_inf))); // 클라이언트에게 전송(파일 인포)
-							}
-							// 파일의 목록 끝 표시
-							memset(&file_inf, 0, sizeof(file_inf)); // 빈파일 구조체 전송(0으로 설정, 파일 목록 끝 표시를 위해)
-							write(i, &file_inf, sizeof(file_inf));
-							closedir(d);
-						}
-						// 클라이언트로부터 파일 이름 받기
-						int str_len = 256;
-						int recv_len = 0;
-						int recv_cnt;
-						while (recv_len < str_len)
-						{
-							recv_cnt = read(i, &file_inf.name[recv_len], NAME_SIZE - 1);
-							// printf("%d\n",recv_cnt);
-							if (recv_cnt == -1)
-								error_handling("read() error!");
-							recv_len += recv_cnt;
-						}
-						file_inf.name[recv_len] = 0;
-						// 클라이언트가 quit하면 break
-						if (strcmp(file_inf.name, "quit") == 0)
-						{
-							break;
-						}
-
-						stat(file_inf.name, &file_stat);
-						file_inf.size = file_stat.st_size;
-
-						// printf("size : %ld",file_inf.size);
-						write(i, &file_inf, sizeof(file_inf));
-						// 해당 파일 클라이언트에게 전송
-						fp = fopen(file_inf.name, "rb");
-						pkt *packet = malloc(sizeof(pkt));
 						while (1)
 						{
-							memset(packet, 0, sizeof(pkt));
-							read_cnt = fread(packet->content, 1, BUF_SIZE, fp);
-							packet->read_size = read_cnt;
-							// printf("read_size : %d", packet->read_size);
-							if (read_cnt < BUF_SIZE)
+
+							//  파일 목록 보내기
+							d = opendir("."); // 현재 디렉토리 열기
+							if (d)
 							{
-								write(i, packet, sizeof(pkt));
+								while ((dir = readdir(d)) != NULL)
+								{
+									stat(dir->d_name, &file_stat); // 파일 stat에 파일 정보들 저장시키고 (stat 함수는 구조체 stat을  반환하는데, 두번째 인자로 전달한 stat 구조체에 파일정보들을 반환(할당)함. 그 구조체에 멤버로
+									// 파일을 관리하기 위한 정보를 담고 있는 inode(파일 권한), off_t st_size (해당 파일 크기)라는 녀석이 있고
+									//  그 inode 정보를 읽을 때 STAT 함수를 통해서 읽을 수 있으며 이 함수를 사용해 읽어오면 반환값으로 두번째 인자로 전달한 주솟값(해당 구조체),
+									// 구조체인 STAT이라는 스트럭처(위의 inode, st_size가 멤버를 갖고있는 구조체를 두번째인자에 줌으로서 거기에 자동 할당해줌) 에 자동할당해줌
+
+									strncpy(file_inf.name, dir->d_name, NAME_SIZE); // 파일 인포 구조체에 각 파일명들 복사
+									file_inf.size = file_stat.st_size;				// 파일 인포 구조체 사이즈에 파일 stat 정보 크기 저장
+
+									printf("%ld\n", write(i, &file_inf, sizeof(file_inf))); // 클라이언트에게 전송(파일 인포)
+								}
+								// 파일의 목록 끝 표시
+								memset(&file_inf, 0, sizeof(file_inf)); // 빈파일 구조체 전송(0으로 설정, 파일 목록 끝 표시를 위해)
+								write(i, &file_inf, sizeof(file_inf));
+								closedir(d);
+							}
+							// 클라이언트로부터 파일 이름 받기
+							int str_len = 256;
+							int recv_len = 0;
+							int recv_cnt;
+							while (recv_len < str_len)
+							{
+								recv_cnt = read(i, &file_inf.name[recv_len], NAME_SIZE - 1);
+								// printf("%d\n",recv_cnt);
+								if (recv_cnt == -1)
+									error_handling("read() error!");
+								recv_len += recv_cnt;
+							}
+							file_inf.name[recv_len] = 0;
+							printf("receive name : %s\n", file_inf.name);
+
+							// 클라이언트가 quit하면 break
+							if (strcmp(file_inf.name, "quit") == 0)
+							{
 								break;
 							}
-							write(i, packet, sizeof(pkt));
+							// if client wants to change directory
+							if (strncmp(file_inf.name, "cd ", 3) == 0)
+							{
+								chdir(file_inf.name + 3);
+								continue;
+							}
+
+							// If client sends 'upload', receive the file
+							if (strncmp(file_inf.name, "upload ", 7) == 0)
+							{
+								int offset = 7; // 7바이트를 제거 (upload 제거)
+								int len = strlen(file_inf.name);
+
+								if (len > offset)
+								{
+									memmove(file_inf.name, file_inf.name + offset, len - offset + 1); // +1은 널 문자를 포함하기 위함입니다.
+								}
+
+								// 클라이언트로부터 파일(패킷(이름,사이즈)) 내용받아 파일로 저장
+								recv_len = 0;
+								while (recv_len < PAKETSIZE)
+								{
+									recv_cnt = read(i, &temp[recv_len], PAKETSIZE - recv_len); // 파일 목록 수신
+									// printf("%d\n",recv_cnt); 여기부분
+									if (recv_cnt == -1)
+										error_handling("read() error!");
+									recv_len += recv_cnt;
+								}
+								temp[recv_len] = 0;
+								memcpy(&file_inf, temp, PAKETSIZE);
+
+								fp = fopen(file_inf.name, "wb"); // 텍스트와 바이너리로 열기
+								int read_file_size;
+								int total_bytes = 0;
+
+								pkt *packet = malloc(sizeof(pkt));
+
+								while (1)
+								{
+									memset(packet, 0, sizeof(pkt));
+
+									// read(sd,packet,sizeof(pkt));
+
+									recv_len = 0;
+									while (recv_len < sizeof(pkt))
+									{
+										recv_cnt = read(i, &temp[recv_len], sizeof(pkt) - recv_len); // 파일 목록 수신
+
+										// printf("%d\n",recv_cnt); 여기부분
+										if (recv_cnt == -1)
+											error_handling("read() error!");
+										recv_len += recv_cnt;
+										// printf("%d %d\n",recv_len, recv_cnt);
+									}
+									temp[recv_len] = 0;
+									memcpy(packet, temp, sizeof(pkt));
+
+									// if (total_bytes >= file_inf.size) {
+									//      read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
+									//     break;
+									// }
+									read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
+									total_bytes += packet->read_size;
+									printf("%d / %ld\n", total_bytes, file_inf.size);
+									if (total_bytes >= file_inf.size)
+									{
+										read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
+										break;
+									}
+								}
+								fclose(fp); // 0값 받으면 다운로드 완료됬다고 표현
+								printf("Download complete\n");
+								free(packet);
+								// 하나를 뭐 더 보내야하나? 서버에서 보내서 클라이언트가 잘 받았다고 확인후 클라이언트측에서 continue를 진행해야하나?
+								continue;
+							}
+
+							stat(file_inf.name, &file_stat);
+							file_inf.size = file_stat.st_size;
+
+							// printf("size : %ld",file_inf.size);
+							write(i, &file_inf, sizeof(file_inf));
+							// 해당 파일 클라이언트에게 전송
+							fp = fopen(file_inf.name, "rb");
+							pkt *packet = malloc(sizeof(pkt));
+							while (1)
+							{
+								memset(packet, 0, sizeof(pkt));
+								read_cnt = fread(packet->content, 1, BUF_SIZE, fp);
+								packet->read_size = read_cnt;
+								// printf("read_size : %d", packet->read_size);
+								if (read_cnt < BUF_SIZE)
+								{
+									write(i, packet, sizeof(pkt));
+									break;
+								}
+								write(i, packet, sizeof(pkt));
+							}
+							// 파일 전송 완료 알림
+							// memset(packet, 0, sizeof(pkt));
+							// write(i, packet, sizeof(pkt));
+
+							// 오류 방지 버퍼 지우기 위해 0으로 memset하기
+							// memset(buf, 0, BUF_SIZE);
+							// write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
+
+							fclose(fp);
+
+							// str_len = read(i, buf, BUF_SIZE);
+							// if (str_len == 0) // close request!
+							// {
+							// FD_CLR(i, &reads);
+							// close(i);
+							// 	printf("closed client: %d \n", i);
+							// }
+							// else
+							// {
+							// 	write(i, buf, str_len); // echo!
+							// }
 						}
-						// 파일 전송 완료 알림
-						// memset(packet, 0, sizeof(pkt));
-						// write(i, packet, sizeof(pkt));
-
-						// 오류 방지 버퍼 지우기 위해 0으로 memset하기
-						// memset(buf, 0, BUF_SIZE);
-						// write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
-
-						fclose(fp);
-
-						// str_len = read(i, buf, BUF_SIZE);
-						// if (str_len == 0) // close request!
-						// {
-						// FD_CLR(i, &reads);
-						// close(i);
-						// 	printf("closed client: %d \n", i);
-						// }
-						// else
-						// {
-						// 	write(i, buf, str_len); // echo!
-						// }
 					}
 					FD_CLR(i, &reads);
 					close(i);
