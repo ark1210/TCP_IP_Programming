@@ -147,13 +147,17 @@ int main(int argc, char *argv[])
 							// 클라이언트가 quit하면 break
 							if (strcmp(file_inf.name, "quit") == 0)
 							{
+								FD_CLR(i, &reads);
+								close(i);
+								printf("closed client: %d \n", i);
 								break;
 							}
 							// if client wants to change directory
 							if (strncmp(file_inf.name, "cd ", 3) == 0)
 							{
 								chdir(file_inf.name + 3);
-								continue;
+								// continue;
+								break;
 							}
 
 							// If client sends 'upload', receive the file
@@ -215,7 +219,7 @@ int main(int argc, char *argv[])
 									printf("%d / %ld\n", total_bytes, file_inf.size);
 									if (total_bytes >= file_inf.size)
 									{
-										read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
+										// read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
 										break;
 									}
 								}
@@ -223,7 +227,8 @@ int main(int argc, char *argv[])
 								printf("Download complete\n");
 								free(packet);
 								// 하나를 뭐 더 보내야하나? 서버에서 보내서 클라이언트가 잘 받았다고 확인후 클라이언트측에서 continue를 진행해야하나?
-								continue;
+								// continue;
+								break;
 							}
 
 							stat(file_inf.name, &file_stat);
@@ -256,6 +261,7 @@ int main(int argc, char *argv[])
 							// write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
 
 							fclose(fp);
+							break;
 
 							// str_len = read(i, buf, BUF_SIZE);
 							// if (str_len == 0) // close request!
@@ -270,9 +276,6 @@ int main(int argc, char *argv[])
 							// }
 						}
 					}
-					FD_CLR(i, &reads);
-					close(i);
-					printf("closed client: %d \n", i);
 				}
 			}
 		}
