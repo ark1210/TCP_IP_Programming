@@ -71,14 +71,15 @@ int main(int argc, char *argv[]) {
         
         if(strcmp(file_inf.name, "quit") == 0){
             write(sd, file_inf.name, NAME_SIZE); 
-            break;
+            //break;
+            exit(1);
         }
-
+   
         // 서버에 내가 입력한 파일이름 전송
         write(sd, file_inf.name, NAME_SIZE);
         //printf("data that is server's transporting : %ld ", write(sd, file_inf.name, NAME_SIZE)); //256 바이트 전송
 
-        // 서버로부터 파일 내용받아 파일로 저장
+        // 서버로부터 파일(패킷(이름,사이즈)) 내용받아 파일로 저장
        recv_len=0;
         while (recv_len<PAKETSIZE) {
             recv_cnt=read(sd, &temp[recv_len], PAKETSIZE - recv_len); //파일 목록 수신
@@ -93,10 +94,12 @@ int main(int argc, char *argv[]) {
       // printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
 
 
-        fp = fopen(file_inf.name, "wb");//텍스트와 바이너리로 열기
+        fp = fopen(file_inf.name, "wb");//텍스트와 바이너리로 쓰기(방금 파일에 대한 사이즈와 이름으로 구성된 패킷을 받았으니까)
         int read_file_size;
         int total_bytes = 0;
         
+
+        //서버에서 보낸 pkt 받기
         pkt *packet = malloc(sizeof(pkt));
          while (1) {
             memset(packet,0,sizeof(pkt));
@@ -105,8 +108,8 @@ int main(int argc, char *argv[]) {
             //read(sd,packet,sizeof(pkt));
         
         recv_len=0;
-        while (recv_len<sizeof(pkt)) {
-            recv_cnt=read(sd, &temp[recv_len], sizeof(pkt) - recv_len); //파일 목록 수신
+        while (recv_len<sizeof(pkt)) { //pkt 받기 (1004 바이트만큼 데이터 경계성 받음)
+            recv_cnt=read(sd, &temp[recv_len], sizeof(pkt) - recv_len); 
 
             //printf("%d\n",recv_cnt); 여기부분
             if(recv_cnt ==-1)
@@ -119,19 +122,23 @@ int main(int argc, char *argv[]) {
          
 
 
-           
+        // int read_file_size;
+        // int total_bytes = 0;
+        
             
-            if (total_bytes >= file_inf.size) {
-                 read_cnt = fwrite(packet->content, 1, packet->read_size, fp);     
-                break;
-            }
-            read_cnt = fwrite(packet->content, 1, packet->read_size, fp);
+          
+            read_cnt = fwrite(packet->content, 1, packet->read_size, fp); //pkt에 content를 서버에서 pkt에 content를 읽은양만큼 쓰기
             total_bytes += packet->read_size;
             printf("%d / %ld\n", total_bytes, file_inf.size);
+              if (total_bytes >= file_inf.size) {
+                 //read_cnt = fwrite(packet->content, 1, packet->read_size, fp);    
+                 //printf("%d / %ld   %d\n", total_bytes, file_inf.size, packet->read_size);   //여기서 실제크기랑 토탈 바이츠가 같으면 break 해버리기
+                break;
+            }
         }
         fclose(fp); //0값 받으면 다운로드 완료됬다고 표현
         printf("Download complete\n");
-        exit(1);
+        //exit(1);
     }
     close(sd);
     return 0;
