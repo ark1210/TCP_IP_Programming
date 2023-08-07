@@ -56,30 +56,32 @@ int main(int argc, char *argv[])
 		error_handling("connect() error!");
 	else
 		puts("Connected...........");
-
+while(1){
 		fputs("do you want to see the server's directory?(Q to quit || yes || no): ", stdout);
 		fgets(temp_buf, BUF_SIZE, stdin);
 		
 		if(!strcmp(temp_buf,"q\n") || !strcmp(temp_buf,"Q\n") ||!strcmp(temp_buf,"no\n"))
 		exit(1);
 
+
 		write(sd, temp_buf, strlen(temp_buf));
-while(1){    
-	while(1) 
-	{
-		recv_len=0;
-        while (recv_len<PAKETSIZE) {
-            recv_cnt=read(sd, &temp[recv_len], PAKETSIZE - recv_len); 
-            //printf("%d\n",recv_cnt); 여기부분
-            if(recv_cnt ==-1)
-                error_handling("read() error!");
-            recv_len+=recv_cnt;
-            
-        }
-        temp[recv_len]=0;
-        memcpy(&file_inf,temp,PAKETSIZE);
-        printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
-        if (file_inf.size == 0) break; //파일 정보 크기 0이면 수신 종료
+  
+        while(1) 
+        {
+            recv_len=0;
+            memset(temp,0,sizeof(temp));
+            while (recv_len<PAKETSIZE) {
+                recv_cnt=read(sd, &temp[recv_len], PAKETSIZE - recv_len); 
+                //printf("%d\n",recv_cnt); 여기부분
+                if(recv_cnt ==-1)
+                    error_handling("read() error!");
+                recv_len+=recv_cnt;
+                
+            }
+            temp[recv_len]=0;
+            memcpy(&file_inf,temp,PAKETSIZE);
+            printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
+            if (file_inf.size == 0) break; //파일 정보 크기 0이면 수신 종료
         }
 		
 		printf("Enter the name of the file you want to download (or 'quit' to exit), 'cd [dir]' to change dir, 'upload [file]' to upload): ");
@@ -200,7 +202,7 @@ while(1){
             total_bytes += packet->read_size;
             printf("%d / %ld\n", total_bytes, file_inf.size);
              if (total_bytes >= file_inf.size) {
-                 read_cnt = fwrite(packet->content, 1, packet->read_size, fp);     
+                 //read_cnt = fwrite(packet->content, 1, packet->read_size, fp);     
                 break;
             }
         }
@@ -213,12 +215,12 @@ while(1){
 		// buf[str_len]=0;
 		// printf("buf from server: %s", buf);
 	
-	}
+	}	
 	
 	close(sd);
 	return 0;
-}
 
+}
 void error_handling(char *buf)
 {
 	fputs(buf, stderr);
