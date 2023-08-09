@@ -31,6 +31,8 @@ TrieNode *createNode(void);
 void insert(TrieNode *root, const char *word);
 int search(TrieNode *root, const char *word);
 void printTrie(TrieNode *root, char *buffer, int level);
+int searchRecursive(TrieNode *node, const char *word, int index);
+int searchPartial(TrieNode *node);
 // Main function
 int main(int argc, char *argv[])
 {
@@ -88,7 +90,7 @@ int main(int argc, char *argv[])
     char buffer[BUF_SIZE];
     printTrie(root, buffer, 0);
 
-    printf("\nsearch : %d\n", search(root, "pohang"));
+    printf("\nsearch : %d\n", search(root, "w"));
 
     while (1)
     {
@@ -181,22 +183,84 @@ int search(TrieNode *root, const char *word)
     TrieNode *cur = root;
     while (*word)
     {
-
         char c = tolower(*word); // 문자를 소문자로 변환
-        if (c < 'a' || c > 'z')  // 알파벳 문자가 아닌 경우 건너뛰기
+
+        int index;
+        if (c == ' ') // 스페이스 문자를 인식하고 처리
+        {
+            index = TRIE_SIZE - 1; // 스페이스를 트라이의 마지막 인덱스로 처리
+        }
+        else if (c < 'a' || c > 'z') // 알파벳 문자가 아닌 경우 건너뛰기
         {
             word++;
             continue;
         }
-        int index = c - 'a';
+        else
+        {
+            index = c - 'a';
+        }
+
         if (!cur->children[index])
-            return 0;
+            return searchPartial(root); // 전체 문자열이 없으면 부분 문자열 검색
+
         cur = cur->children[index];
         word++;
     }
 
-    return cur->isEndOfWord;
+    return cur->isEndOfWord ? 1 : searchPartial(root); // 전체 문자열이 있으면 1, 없으면 부분 문자열 검색
 }
+
+int searchPartial(TrieNode *node)
+{
+    if (node->isEndOfWord)
+        return 1; // 부분 문자열 발견
+    for (int i = 0; i < TRIE_SIZE; i++)
+    {
+        if (node->children[i] && searchPartial(node->children[i]))
+            return 1;
+    }
+    return 0;
+}
+
+// int search(TrieNode *root, const char *word)
+// {
+//     TrieNode *cur = root;
+//     while (*word)
+//     {
+//         char c = tolower(*word); // 문자를 소문자로 변환
+
+//         int index;
+//         if (c == ' ') // 스페이스 문자를 인식하고 처리
+//         {
+//             index = TRIE_SIZE - 1; // 스페이스를 트라이의 마지막 인덱스로 처리
+//             printf("Space character encountered\n");
+//         }
+//         else if (c < 'a' || c > 'z') // 알파벳 문자가 아닌 경우 건너뛰기
+//         {
+//             // printf("Non-alphabet character encountered: %c\n", c);
+//             word++;
+//             continue;
+//         }
+//         else
+//         {
+//             index = c - 'a';
+//         }
+
+//         // printf("Current character: %c, Index: %d\n", c, index);
+
+//         if (!cur->children[index])
+//         {
+//             // printf("Child node not found at index %d, exiting search\n", index);
+//             return 0;
+//         }
+
+//         cur = cur->children[index];
+//         word++;
+//     }
+
+//     // printf("Search completed. End of word flag: %d\n", cur->isEndOfWord);
+//     return cur->isEndOfWord;
+// }
 
 // Other functions are the same as before, with modification to handle_clnt to perform search
 void *handle_clnt(void *arg)
