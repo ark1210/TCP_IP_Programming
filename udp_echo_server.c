@@ -14,7 +14,12 @@ typedef struct
 {
     char data[BUF_SIZE];
     int seq;
+    int data_size; // 실제 데이터 크기를 추적.
 } pkt;
+
+// 클라이언트와 서버 양쪽에서 사용하는 구조체 packet 의 정의가 완전히 일치해야함
+// 즉, 구조체의 필드순서, 크기 , 정렬 등이 정확히 같아야 데이터가 올바르게 전송
+// sizeof(pkt)로 보내기 때문에 pedding byte까지 생각하기
 
 void error_handling(char *message);
 
@@ -50,10 +55,12 @@ int main(int argc, char *argv[])
     if (bind(serv_sock, (struct sockaddr *)&serv_adr, sizeof(serv_adr)) == -1)
         error_handling("bind() error");
 
+    memset(&Pkt, 0, sizeof(Pkt)); // 패킷을 0으로 초기화
     clnt_adr_sz = sizeof(clnt_adr);
     recvfrom(serv_sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&clnt_adr, &clnt_adr_sz);
 
     setsockopt(serv_sock, SOL_SOCKET, SO_RCVTIMEO, &optVal, optLen);
+    printf("Received file name: %s\n", Pkt.data);
 
     fp = fopen(Pkt.data, "rb");
     if (fp == NULL)
@@ -65,7 +72,7 @@ int main(int argc, char *argv[])
         // 데이터
         read_cnt = fread((void *)Pkt.data, 1, BUF_SIZE - 1, fp);
         // Pkt.data[read_cnt] = 0;
-
+        Pkt.data_size = read_cnt; // 여기에 실제 읽은 바이트 수를 저장합니다.
         // Sequence
 
         Pkt.seq = seq_num;
