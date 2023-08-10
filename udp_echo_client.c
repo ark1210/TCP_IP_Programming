@@ -9,10 +9,16 @@
 //reciever는 일단 sender 폴더에 있는 원하는 파일 이름 전송
 #define BUF_SIZE 1024
 
-typedef struct {
+typedef struct
+{
     char data[BUF_SIZE];
     int seq;
-}pkt;
+    int data_size; // 실제 데이터 크기를 추적.
+} pkt;
+
+//클라이언트와 서버 양쪽에서 사용하는 구조체 packet 의 정의가 완전히 일치해야함
+//즉, 구조체의 필드순서, 크기 , 정렬 등이 정확히 같아야 데이터가 올바르게 전송
+//sizeof(pkt)로 보내기 때문에 pedding byte까지 생각하기 
 
 void error_handling(char *message);
 //reciever는 optval 필요없음
@@ -38,8 +44,12 @@ int main(int argc, char *argv[]) {
     serv_adr.sin_addr.s_addr = inet_addr(argv[1]);
     serv_adr.sin_port = htons(atoi(argv[2]));
 
-    printf("Enter the name of the file that is in server direcrory Then you can download: ");
-    scanf("%s", Pkt.data);
+    memset(&Pkt, 0, sizeof(Pkt)); // 패킷을 0으로 초기화
+
+    printf("Enter the name of the file that is in server directory Then you can download: ");
+    fgets(Pkt.data, sizeof(Pkt.data), stdin);
+    Pkt.data[strcspn(Pkt.data, "\n")] = 0; // 줄바꿈 문자 제거
+    printf("Sending file name: %s\n", Pkt.data); // 여기에 로그 추가
 
 
     sendto(sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&serv_adr, sizeof(serv_adr));
@@ -56,7 +66,7 @@ int main(int argc, char *argv[]) {
             break;
         
         if (Pkt.seq == seq_num) {
-            fwrite((void *)Pkt.data, 1, BUF_SIZE - 1, fp);
+            fwrite((void *)Pkt.data, 1, Pkt.data_size, fp); //data_size 필드를 사용해 적절한 바이트 수만큼 쓰기
             seq_num++;
              printf("%d\n", Pkt.seq);
         }
