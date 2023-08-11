@@ -121,10 +121,26 @@ void *handle_clnt(void *arg)
 
     char userSearchTerm[BUF_SIZE];
 
-    while ((str_len = read(clnt_sock, userSearchTerm, sizeof(userSearchTerm))) != 0)
+    while ((str_len = read(clnt_sock, userSearchTerm, sizeof(userSearchTerm) - 1)) != 0)
     {
-        // printf("strlen  %d", str_len);
         userSearchTerm[str_len] = '\0'; // 문자열 종료
+
+        // 백스페이스 처리
+        for (int i = 0; i < str_len; i++)
+        {
+            if (userSearchTerm[i] == 8 && i > 0)
+            { // ASCII 8 is backspace
+                // 문자열에서 마지막 문자 제거
+                for (int j = i - 1; j < str_len - 1; j++)
+                {
+                    userSearchTerm[j] = userSearchTerm[j + 1];
+                }
+                userSearchTerm[str_len - 1] = '\0';
+                i -= 2; // 백스페이스 문자와 이전 문자 모두 제거
+            }
+        }
+
+        // printf("Received from client: %s\n", userSearchTerm);
         searchPacket(userSearchTerm, clnt_sock);
     }
 
@@ -171,6 +187,57 @@ void printPackets()
     }
 }
 
+// void searchPacket(const char *searchTerm, int sock)
+// {
+//     int found = 0;
+//     char result[MAX_LINES * (BUF_SIZE + 20)]; // Enough space for results
+//     result[0] = '\0';                         // Initialize result string
+
+//     // Storing lines that match the search term
+//     pkt foundPackets[MAX_LINES];
+//     int foundCount = 0;
+//     for (int i = 0; i < MAX_LINES; i++)
+//     {
+//         if (strstr(packets[i].buf, searchTerm))
+//         {
+//             foundPackets[foundCount++] = packets[i];
+//             found = 1;
+//         }
+//     }
+
+//     // Sorting by count in descending order
+//     for (int i = 0; i < foundCount - 1; i++)
+//     {
+//         for (int j = 0; j < foundCount - i - 1; j++)
+//         {
+//             if (foundPackets[j].count < foundPackets[j + 1].count)
+//             {
+//                 pkt temp = foundPackets[j];
+//                 foundPackets[j] = foundPackets[j + 1];
+//                 foundPackets[j + 1] = temp;
+//             }
+//         }
+//     }
+
+//     // Adding sorted results to the result string
+//     for (int i = 0; i < foundCount; i++)
+//     {
+//         // strcat(result, "FOUND in Line ");
+//         char line_num_str[10];
+//         sprintf(line_num_str, "%d: ", foundPackets[i].line_num);
+//         strcat(result, line_num_str);
+//         strcat(result, foundPackets[i].buf);
+//         strcat(result, "\n");
+//     }
+
+//     if (!found)
+//     {
+//         strcpy(result, "NOT FOUND\n");
+//     }
+
+//     // Send the result to the client
+//     write(sock, result, strlen(result));
+// }
 void searchPacket(const char *searchTerm, int sock)
 {
     int found = 0;
@@ -208,7 +275,7 @@ void searchPacket(const char *searchTerm, int sock)
     {
         // strcat(result, "FOUND in Line ");
         char line_num_str[10];
-        // sprintf(line_num_str, "%d: ", foundPackets[i].line_num);
+        sprintf(line_num_str, "%d: ", foundPackets[i].line_num);
         strcat(result, line_num_str);
         strcat(result, foundPackets[i].buf);
         strcat(result, "\n");
@@ -218,7 +285,7 @@ void searchPacket(const char *searchTerm, int sock)
     {
         strcpy(result, "NOT FOUND\n");
     }
-
+    printf("Sending result to client:\n%s\n", result);
     // Send the result to the client
     write(sock, result, strlen(result));
 }
