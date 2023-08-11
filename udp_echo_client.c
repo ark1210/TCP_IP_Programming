@@ -29,6 +29,7 @@ int main(int argc, char *argv[]) {
     FILE *fp;
     struct sockaddr_in serv_adr;
     pkt Pkt;
+    pkt Ack;
     int read_cnt;
 
     if (argc != 3) {
@@ -52,7 +53,17 @@ int main(int argc, char *argv[]) {
     printf("Sending file name: %s\n", Pkt.data); // 여기에 로그 추가
 
 
-    sendto(sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&serv_adr, sizeof(serv_adr));
+    int file_name_sent = 0;
+    while (!file_name_sent) //클라이언트에서는 파일 이름을 보낸 후 서버로부터 동일한 내용의 확인 응답을 받을 때까지 계속 시도
+    {
+        sendto(sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&serv_adr, sizeof(serv_adr));
+        if (recvfrom(sock, &Ack, sizeof(pkt), 0, NULL, NULL) != -1) {
+            if (strcmp(Ack.data, Pkt.data) == 0) { // 받은 응답의 내용이 보낸 파일 이름과 동일한지 확인
+                file_name_sent = 1;
+            }
+        }
+    }
+
 
     fp = fopen(Pkt.data, "wb");
     if (fp == NULL) error_handling("fopen() error!");
