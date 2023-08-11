@@ -57,7 +57,15 @@ int main(int argc, char *argv[])
 
     memset(&Pkt, 0, sizeof(Pkt)); // 패킷을 0으로 초기화
     clnt_adr_sz = sizeof(clnt_adr);
-    recvfrom(serv_sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&clnt_adr, &clnt_adr_sz);
+    int file_name_received = 0;
+    while (!file_name_received) // 서버에서 파일 이름을 받고 난 뒤 클라이언트에게 확인 응답을 보냄.
+    {
+        if (recvfrom(serv_sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&clnt_adr, &clnt_adr_sz) != -1)
+        {
+            sendto(serv_sock, &Pkt, sizeof(pkt), 0, (struct sockaddr *)&clnt_adr, clnt_adr_sz);
+            file_name_received = 1;
+        }
+    }
 
     setsockopt(serv_sock, SOL_SOCKET, SO_RCVTIMEO, &optVal, optLen);
     printf("Received file name: %s\n", Pkt.data);
