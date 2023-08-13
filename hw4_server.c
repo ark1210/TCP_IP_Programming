@@ -62,29 +62,28 @@ int main(int argc, char *argv[])
     // }
 
     char line[BUF_SIZE];
-    int line_num = 0;
-    while (fgets(line, sizeof(line), file) != NULL)
+    int line_num = 0;                               // 현재 읽고 있는 줄 번호 0으로 초기값 설정, 각 줄이 pkt 배열의 요소들과 일치
+    while (fgets(line, sizeof(line), file) != NULL) // 파일에서 한 줄씩 읽기(파일 끝 도달하면 반복 종료)
     {
-        line[strcspn(line, "\n")] = 0; // Remove newline character
+        line[strcspn(line, "\n")] = 0; // 개행문자 제거
 
-        // Finding the last space before the number
-        char *last_space = strrchr(line, ' ');
-        if (last_space && isdigit(*(last_space + 1)))
+        char *last_space = strrchr(line, ' ');        // 줄에서 마지막 spacebar 문자의 위치를 찾기
+        if (last_space && isdigit(*(last_space + 1))) // 만약 마지막 문자에 공백 문자가 있고, 그 뒤에 숫자가 오면 조건문 실행
         {
-            // Extract the number
+            // 숫자 pkt에 넣어버리기
             packets[line_num].count = atoi(last_space + 1);
 
-            // Null-terminate to separate string and number
+            // 해당 공백 부분에 널문자 넣기
             *last_space = '\0';
             strncpy(packets[line_num].buf, line, BUF_SIZE - 1);
             packets[line_num].buf[BUF_SIZE - 1] = '\0';
         }
         else
         {
-            // No number found, save the entire line
+            // 만약 숫자 없으면 걍 라인 자체를 buf에 넣어버리기
             strncpy(packets[line_num].buf, line, BUF_SIZE - 1);
             packets[line_num].buf[BUF_SIZE - 1] = '\0';
-            packets[line_num].count = 0; // Or any other default value
+            packets[line_num].count = 0; // count 조회수는 0으로 설정
         }
         packets[line_num].line_num = line_num;
         line_num++;
@@ -238,16 +237,16 @@ void printPackets()
 //     // Send the result to the client
 //     write(sock, result, strlen(result));
 // }
-void searchPacket(const char *searchTerm, int sock)
+void searchPacket(const char *searchTerm, int sock) // 첫번째 인자는 검색할 문자열, 다른 하나는 소켓 파일 디스크립터
 {
-    int found = 0;
-    char result[MAX_LINES * (BUF_SIZE + 20)]; // Enough space for results
-    result[0] = '\0';                         // Initialize result string
+    int found = 0;                            // 문자열 검색이 발견되면 1로 설정하기 위함.
+    char result[MAX_LINES * (BUF_SIZE + 20)]; // result 변수로 검색결과 저장함.
+    result[0] = '\0';
 
     // Storing lines that match the search term
-    pkt foundPackets[MAX_LINES];
-    int foundCount = 0;
-    for (int i = 0; i < MAX_LINES; i++)
+    pkt foundPackets[MAX_LINES];        // 일치하는 패킷 임시 저장
+    int foundCount = 0;                 // 발견된 패킷의 수 저장
+    for (int i = 0; i < MAX_LINES; i++) // 배열 요소 반복하면서 각 패킷내 문자열 찾기
     {
         if (strstr(packets[i].buf, searchTerm))
         {
@@ -256,7 +255,7 @@ void searchPacket(const char *searchTerm, int sock)
         }
     }
 
-    // Sorting by count in descending order
+    // 버블 sorting  내림차순(count는 조회수)
     for (int i = 0; i < foundCount - 1; i++)
     {
         for (int j = 0; j < foundCount - i - 1; j++)
@@ -270,7 +269,7 @@ void searchPacket(const char *searchTerm, int sock)
         }
     }
 
-    // Adding sorted results to the result string
+    // 서버를 통해 정렬된 foundpacket 배열을 그대로 result 변수에 넣어버리기
     for (int i = 0; i < foundCount; i++)
     {
         // strcat(result, "FOUND in Line ");
@@ -287,5 +286,5 @@ void searchPacket(const char *searchTerm, int sock)
     }
     printf("Sending result to client:\n%s\n", result);
     // Send the result to the client
-    write(sock, result, strlen(result));
+    write(sock, result, strlen(result)); // result를 자체로 클라이언트에게 전송
 }
