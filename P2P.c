@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
         if (sent_bytes < 0) {
         perror("Failed to send port number");
         }
-        
+
         // ID 및 기타 필요한 정보 수신
         pkt peers_info[MAX_RECV_PEER - 1];
         ssize_t bytes_read = read(sending_peer_sock, peers_info, sizeof(peers_info));
@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
 
         int num_peers = bytes_read / sizeof(pkt); //실제 수신된  피어의 수
         printf("num_peers : %d\n",num_peers);
-        for (int i = 0; i < num_peers; i++) //수신된 피어의 수만큼 반복
+        for (int i = 0; i < num_peers; i++) //수신된 피어의 수만큼
         {
             printf("Received Peer Information: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
         }
