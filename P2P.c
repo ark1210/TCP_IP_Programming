@@ -6,11 +6,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <malloc.h>
 
 #define INET_ADDRSTRLEN 16
 #define FILE_NAME_LENGTH 100
 #define INFO_SIZE 128
-#define MAX_RECV_PEER 3
+#define MAX_RECV_PEER 10
 // Packet 구조체 정의
 typedef struct
 {
@@ -188,19 +189,24 @@ int main(int argc, char *argv[])
         printf("Received Peer Information: IP %s, Port %s, ID %d\n", peer_packets[1].ip, peer_packets[1].port, peer_packets[1].id);
         printf("Received Peer Information: IP %s, Port %s, ID %d\n", peer_packets[2].ip, peer_packets[2].port, peer_packets[2].id);
         // Receiving Peers의 정보 교환
+        
 
-        for (int i = 0; i < MAX_RECV_PEER; i++)
-        {
-            if(i == 0) // 리시빙 피어1
-            {
-                send_peer_info(client_socks[i], &peer_packets[1], 2); // 피어2와 피어3의 정보 전송
+            // 모든 리시빙 피어가 연결된 후 각 리시빙 피어에게 연결 정보 전달
+        for (int i = 0; i < client_count; i++) {
+            int current_client_sock = client_socks[i];
+            
+            // 현재 리시빙 피어가 받을 메시지의 총 길이 계산
+            int message_length = sizeof(pkt) * (client_count - i - 1); // 현재 리시빙 피어보다 높은 ID를 가진 피어들의 정보 크기
+            send(current_client_sock, &message_length, sizeof(message_length), 0);
+            
+            // 현재 리시빙 피어보다 높은 ID를 가진 피어들의 정보를 전송
+            for (int j = i + 1; j < client_count; j++) {
+                send(current_client_sock, &peer_packets[j], sizeof(pkt), 0);
             }
-            else if(i == 1) // 리시빙 피어2
-            {
-                send_peer_info(client_socks[i], &peer_packets[2], 1); // 피어3의 정보만 전송
-            }
-            // 리시빙 피어3에게는 정보를 전송하지 않습니다.
         }
+
+
+        
     }
 
     if (peer == 'r')
@@ -208,7 +214,7 @@ int main(int argc, char *argv[])
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
 
-        // accept() 스레드 생성
+         // accept() 스레드 생성
         pthread_t accept_thread;
         if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
             perror("Failed to create accept thread");
@@ -233,7 +239,7 @@ int main(int argc, char *argv[])
         sending_peer_addr.sin_addr.s_addr = inet_addr(ip);
         sending_peer_addr.sin_port = htons(atoi(opponent_port));
 
-        printf("test \n");
+        //printf("test \n");
 
         // Sending Peer에 연결
         if (connect(sending_peer_sock, (struct sockaddr *)&sending_peer_addr, sizeof(sending_peer_addr)) < 0)
@@ -247,29 +253,43 @@ int main(int argc, char *argv[])
         perror("Failed to send port number");
         }
 
-        // ID 및 기타 필요한 정보 수신
-        pkt peers_info[MAX_RECV_PEER - 1];
-        ssize_t bytes_read = read(sending_peer_sock, peers_info, sizeof(peers_info));
+            // 먼저 메시지의 길이를 받습니다.
+        int message_length;
+        ssize_t bytes_read = read(sending_peer_sock, &message_length, sizeof(message_length));
         if (bytes_read <= 0)
         {
-            perror("read");
+            perror("read message_length");
             exit(EXIT_FAILURE);
         }
 
-        int num_peers = bytes_read / sizeof(pkt); //실제 수신된  피어의 수
-        printf("num_peers : %d\n",num_peers);
-        for (int i = 0; i < num_peers; i++) //수신된 피어의 수만큼
+        // 그 후, 메시지 길이만큼 정보를 수신합니다.
+        pkt peers_info[MAX_RECV_PEER - 1];
+        int total_received = 0;
+        while (total_received < message_length)
+        {
+            bytes_read = read(sending_peer_sock, ((char*)peers_info) + total_received, message_length - total_received);
+            if (bytes_read <= 0)
+            {
+                perror("read peer info");
+                exit(EXIT_FAILURE);
+            }
+            total_received += bytes_read;
+        }
+
+        int num_peers = total_received / sizeof(pkt); // 실제 수신된 피어의 수
+        printf("num_peers : %d\n", num_peers);
+        for (int i = 0; i < num_peers; i++) // 수신된 피어의 수만큼
         {
             printf("Received Peer Information: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
         }
 
-        
+                
 
-        // 리시빙 피어3는 다른 연결을 시도하지 않습니다.
-        if (id != 3)
+        // 마지막 피어는 다른 연결을 시도하지 않습니다.
+        if (num_peers != 0)
         {
-            pkt *peers_data = malloc(sizeof(pkt) * (MAX_RECV_PEER - 1));
-            memcpy(peers_data, peers_info, sizeof(pkt) * (MAX_RECV_PEER - 1));
+            pkt *peers_data = malloc(sizeof(pkt) * (num_peers));
+            memcpy(peers_data, peers_info, sizeof(pkt) * (num_peers));
 
             pthread_t connect_thread;
             if (pthread_create(&connect_thread, NULL, connectToOtherPeers, (void *)peers_data) != 0)
@@ -278,8 +298,9 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
             }
         }
+      
+        pthread_join(accept_thread, NULL);
 
-    pthread_join(accept_thread, NULL);
     }
     
 }
@@ -300,7 +321,7 @@ void* acceptThreadFunc(void* arg) {
     int listen_sock, client_sock;
     struct sockaddr_in listen_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-
+    //printf("what is that?\n");
     // 소켓 생성
     if ((listen_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket");
@@ -324,7 +345,7 @@ void* acceptThreadFunc(void* arg) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-
+    //printf("dkanrjsk\n");
     // 계속해서 연결을 수락
     while (1) {
         client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
@@ -335,7 +356,7 @@ void* acceptThreadFunc(void* arg) {
 
         // 이 부분에서 client_sock와의 통신이나 필요한 작업을 수행할 수 있습니다.
         // 예를 들어, 다른 피어로부터 받은 데이터를 처리하는 코드 등이 올 수 있습니다.
-
+        printf("succeed accept %d \n",client_sock);
         close(client_sock);
     }
 
@@ -344,14 +365,12 @@ void* acceptThreadFunc(void* arg) {
 }
 void *connectToOtherPeers(void *data)
 {
-    int id =0;
+    
     pkt *peers_info = (pkt *)data;
     
-    for (int i = 0; i < MAX_RECV_PEER - 1; i++)
+    for (int i = 0; i <malloc_usable_size(peers_info)/sizeof(pkt) ; i++)
     {
-        // 자신보다 큰 ID의 리시빙 피어에게만 연결을 시도
-        if (peers_info[i].id > id)
-        {
+        
             int peer_sock;
             struct sockaddr_in peer_addr;
 
@@ -368,6 +387,8 @@ void *connectToOtherPeers(void *data)
             peer_addr.sin_addr.s_addr = inet_addr(peers_info[i].ip);
             peer_addr.sin_port = htons(atoi(peers_info[i].port));
 
+            //printf("Connected to Peer: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
+
             // 다른 Receiving Peer에 연결
             if (connect(peer_sock, (struct sockaddr *)&peer_addr, sizeof(peer_addr)) < 0)
             {
@@ -378,7 +399,7 @@ void *connectToOtherPeers(void *data)
 
             printf("Connected to Peer: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
             close(peer_sock);
-        }
+        
     }
     free(data);
     return NULL;
