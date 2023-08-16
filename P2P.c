@@ -21,8 +21,8 @@ typedef struct
     int id; // 해당 리시빙 피어의 번호
 } pkt;
 typedef struct {
-    char* port;
-    int max_peers;  // 최대 수용할 수 있는 피어 수
+    char *port;
+    int my_id; //해당 리시빙 피어의 id값 
 } AcceptThreadArgs;
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
@@ -184,7 +184,9 @@ int main(int argc, char *argv[])
             strncpy(peer_packets[client_count].port, received_port, 5);
 
             peer_packets[client_count].id = client_count + 1; // ID는 1부터 시작
-
+            // ID 전송
+            write(client_sock, &peer_packets[client_count].id, sizeof(peer_packets[client_count].id)); //해당 리시버에게 id값 전송하기
+            //write(i, &file_inf, sizeof(file_inf));
             client_socks[client_count] = client_sock;
             client_count++;
         }
@@ -219,22 +221,13 @@ int main(int argc, char *argv[])
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
 
          // accept() 스레드 생성
-        pthread_t accept_thread;
-        if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
-            perror("Failed to create accept thread");
-            exit(EXIT_FAILURE);
-        }
-       
-        // AcceptThreadArgs args;
-        // args.port = port;
-        // args.max_peers = max_num_recv_peer - num_peers; // 수락해야 할 최대 피어 수 계산
-
         // pthread_t accept_thread;
-        // if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)&args) != 0) {
+        // if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
         //     perror("Failed to create accept thread");
         //     exit(EXIT_FAILURE);
         // }
-                
+
+       
 
 
         int sending_peer_sock;
@@ -267,6 +260,40 @@ int main(int argc, char *argv[])
         if (sent_bytes < 0) {
         perror("Failed to send port number");
         }
+        
+        int my_id; //해당 리시버 피어의 id값 받기.
+        ssize_t total_readed_bytes = 0;
+        ssize_t current_readed_bytes;
+
+        while (total_readed_bytes < sizeof(my_id)) {
+            current_readed_bytes = read(sending_peer_sock, ((char *)&my_id) + total_readed_bytes, sizeof(my_id) - total_readed_bytes);
+            
+            if (current_readed_bytes == -1) {
+                perror("Failed to read ID");
+                exit(EXIT_FAILURE);
+            }
+            
+            if (current_readed_bytes == 0) {
+                printf("Connection closed before all data was received\n");
+                exit(EXIT_FAILURE);
+            }
+            
+            total_readed_bytes += current_readed_bytes;
+        }
+
+        printf("my_ID: %d\n", my_id);
+
+        // accept() 스레드 생성
+        AcceptThreadArgs args;
+        args.port = port;
+        args.my_id = my_id;
+
+        pthread_t accept_thread;
+        if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)&args) != 0) {
+            perror("Failed to create accept thread");
+            exit(EXIT_FAILURE);
+        }
+
 
             // 먼저 메시지의 길이를 받습니다.
         int message_length;
@@ -333,7 +360,9 @@ void send_peer_info(int client_sock, pkt *info_packets, int count)
 
 
 void* acceptThreadFunc(void* arg) {
-    char* port = (char*) arg;
+    AcceptThreadArgs *args = (AcceptThreadArgs*) arg;
+    char* port = args->port;
+    int my_id = args->my_id;
     int listen_sock,client_sock;
     //int client_socks[MAX_PEERS] = {-1}; // -1로 초기화, 연결되지 않은 상태를 의미
     int* client_socks = NULL; // 동적 배열로 선언
@@ -385,10 +414,16 @@ void* acceptThreadFunc(void* arg) {
         printf("succeed accept %d at index %d\n", client_sock, num_clients);
         num_clients++;
 
+        // my_id 값을 기반으로 반복문 탈출 조건 추가
+        if (num_clients == my_id - 1) {
+            break;
+        }
+        
+
         // ... [기타 코드]
     }
-        // 모든 client_sock 및 listen_sock 종료
-            // 연결 종료 및 메모리 해제
+        //모든 client_sock 및 listen_sock 종료
+          //  연결 종료 및 메모리 해제
         for (int i = 0; i < num_clients; i++) {
             close(client_socks[i]);
         }
