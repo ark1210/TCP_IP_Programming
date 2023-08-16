@@ -210,6 +210,19 @@ int main(int argc, char *argv[])
                 send(current_client_sock, &peer_packets[j], sizeof(pkt), 0);
             }
         }
+        // Sending Peer에서 모든 Receiving peers로부터 "init complete" 메시지 수신
+
+        char init_complete_msg[14]; // "init complete" 문자열의 크기는 13 + 1(null) = 14
+        for (int i = 0; i < client_count; i++)
+        {
+            int bytes_received = read(client_socks[i], init_complete_msg, 12); // 12 bytes를 읽습니다.
+            init_complete_msg[bytes_received] = '\0'; // 문자열 종료를 보장합니다.
+
+            printf("expected message received from Receiving Peer : %s %d\n",init_complete_msg, i+1);
+                close(client_socks[i]);
+                continue;
+            // 해당 Receiving Peer의 초기화가 완료되었음을 확인했습니다.
+        }
 
 
         
@@ -220,16 +233,7 @@ int main(int argc, char *argv[])
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
 
-         // accept() 스레드 생성
-        // pthread_t accept_thread;
-        // if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
-        //     perror("Failed to create accept thread");
-        //     exit(EXIT_FAILURE);
-        // }
-
-       
-
-
+ 
         int sending_peer_sock;
         struct sockaddr_in sending_peer_addr;
         
@@ -341,6 +345,16 @@ int main(int argc, char *argv[])
         }
         pthread_join(connect_thread, NULL);
         pthread_join(accept_thread, NULL);
+
+        // "init complete" 문자열을 sending peer에게 전송
+        const char *message = "init complete";
+        ssize_t bytes_ssent = write(sending_peer_sock, message, strlen(message));
+        printf("%s\n",message);
+        if (bytes_ssent < 0) 
+        {
+            perror("Failed to send init complete message");
+            exit(EXIT_FAILURE);
+        }
 
     }
     
