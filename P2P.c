@@ -21,8 +21,9 @@ typedef struct
     int id; // 해당 리시빙 피어의 번호
 } pkt;
 typedef struct {
-    char *port;
-    int my_id; //해당 리시빙 피어의 id값 
+    int listen_sock;
+    int* client_socks; // 이것은 동적 배열로, accept된 클라이언트 소켓들의 목록을 담게 됩니다.
+    int my_id;
 } AcceptThreadArgs;
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
@@ -215,7 +216,7 @@ int main(int argc, char *argv[])
         char init_complete_msg[14]; // "init complete" 문자열의 크기는 13 + 1(null) = 14
         for (int i = 0; i < client_count; i++)
         {
-            int bytes_received = read(client_socks[i], init_complete_msg, 12); // 12 bytes를 읽습니다.
+            int bytes_received = read(client_socks[i], init_complete_msg, 13); // 13 bytes를 읽습니다.
             init_complete_msg[bytes_received] = '\0'; // 문자열 종료를 보장합니다.
 
             printf("expected message received from Receiving Peer : %s %d\n",init_complete_msg, i+1);
@@ -232,8 +233,35 @@ int main(int argc, char *argv[])
     {
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
+        // Setup for acceptThreadFunc
+        int listen_sock;
+        int* client_socks = NULL; // 동적 배열로 선언
+        struct sockaddr_in listen_addr;
 
- 
+        // 소켓 생성
+        if ((listen_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+            perror("socket");
+            exit(EXIT_FAILURE);
+        }
+
+        // 주소 설정
+        memset(&listen_addr, 0, sizeof(listen_addr));
+        listen_addr.sin_family = AF_INET;
+        listen_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+        listen_addr.sin_port = htons(atoi(port));
+
+        // 소켓에 주소 바인딩
+        if (bind(listen_sock, (struct sockaddr*)&listen_addr, sizeof(listen_addr)) < 0) {
+            perror("bind");
+            exit(EXIT_FAILURE);
+        }
+
+        // 연결 대기
+        if (listen(listen_sock, 5) < 0) {
+            perror("listen");
+            exit(EXIT_FAILURE);
+        }
+    
         int sending_peer_sock;
         struct sockaddr_in sending_peer_addr;
         
@@ -289,11 +317,12 @@ int main(int argc, char *argv[])
 
         // accept() 스레드 생성
         AcceptThreadArgs args;
-        args.port = port;
+        args.listen_sock = listen_sock;
+        args.client_socks = client_socks;
         args.my_id = my_id;
 
         pthread_t accept_thread;
-        if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)&args) != 0) {
+        if (pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)&args) != 0) {
             perror("Failed to create accept thread");
             exit(EXIT_FAILURE);
         }
@@ -375,59 +404,26 @@ void send_peer_info(int client_sock, pkt *info_packets, int count)
 
 void* acceptThreadFunc(void* arg) {
     AcceptThreadArgs *args = (AcceptThreadArgs*) arg;
-    char* port = args->port;
+    int listen_sock = args->listen_sock;
+    int* client_socks = args->client_socks;
     int my_id = args->my_id;
-    int listen_sock,client_sock;
-    //int client_socks[MAX_PEERS] = {-1}; // -1로 초기화, 연결되지 않은 상태를 의미
-    int* client_socks = NULL; // 동적 배열로 선언
-    int num_clients = 0; // 현재 연결된 클라이언트 수
-    struct sockaddr_in listen_addr, client_addr;
+
+    struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
+    int num_clients = 0; // 현재 연결된 클라이언트 수
 
-    // 소켓 생성
-    if ((listen_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // 주소 설정
-    memset(&listen_addr, 0, sizeof(listen_addr));
-    listen_addr.sin_family = AF_INET;
-    listen_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
-    listen_addr.sin_port = htons(atoi(port));
-
-    // 소켓에 주소 바인딩
-    if (bind(listen_sock, (struct sockaddr*)&listen_addr, sizeof(listen_addr)) < 0) {
-        perror("bind");
-        exit(EXIT_FAILURE);
-    }
-
-    // 연결 대기
-    if (listen(listen_sock, 5) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
-    int temp =1;
-
-    if(my_id!=temp)
-    {
-        
-            // 계속해서 연결을 수락
-        while (1)
-        {
+    int temp = 1;
+    if (my_id != temp) {
+        // 계속해서 연결을 수락
+        while (1) {
             int client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
             if (client_sock < 0) {
                 perror("accept");
                 continue;
             }
 
-            // 배열의 크기를 증가시키기 위한 메모리 재할당
             client_socks = realloc(client_socks, (num_clients + 1) * sizeof(int));
-            if (!client_socks) {
-                perror("realloc");
-                exit(EXIT_FAILURE);
-            }
-
+            
             client_socks[num_clients] = client_sock;
             printf("succeed accept %d at index %d\n", client_sock, num_clients);
             num_clients++;
@@ -436,17 +432,9 @@ void* acceptThreadFunc(void* arg) {
             if (num_clients == my_id - 1) {
                 break;
             }
-            
-
-            // ... [기타 코드]
         }
     }
-        //모든 client_sock 및 listen_sock 종료
-          //  연결 종료 및 메모리 해제
-        for (int i = 0; i < num_clients; i++) {
-            close(client_socks[i]);
-        }
-        free(client_socks);
+    return NULL;
 }
    
 
