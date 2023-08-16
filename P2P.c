@@ -12,6 +12,7 @@
 #define FILE_NAME_LENGTH 100
 #define INFO_SIZE 128
 #define MAX_RECV_PEER 10
+#define MAX_PEERS 10
 // Packet 구조체 정의
 typedef struct
 {
@@ -19,7 +20,10 @@ typedef struct
     char port[5];
     int id; // 해당 리시빙 피어의 번호
 } pkt;
-
+typedef struct {
+    char* port;
+    int max_peers;  // 최대 수용할 수 있는 피어 수
+} AcceptThreadArgs;
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
 void* acceptThreadFunc(void* arg);
@@ -214,13 +218,24 @@ int main(int argc, char *argv[])
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
 
-         // accept() 스레드 생성
+        //  // accept() 스레드 생성
+        // pthread_t accept_thread;
+        // if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
+        //     perror("Failed to create accept thread");
+        //     exit(EXIT_FAILURE);
+        // }
+       
+        AcceptThreadArgs args;
+        args.port = port;
+        args.max_peers = max_num_recv_peer - num_peers; // 수락해야 할 최대 피어 수 계산
+
         pthread_t accept_thread;
-        if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)port) != 0) {
+        if(pthread_create(&accept_thread, NULL, acceptThreadFunc, (void*)&args) != 0) {
             perror("Failed to create accept thread");
             exit(EXIT_FAILURE);
         }
-        
+                
+
 
         int sending_peer_sock;
         struct sockaddr_in sending_peer_addr;
@@ -283,8 +298,7 @@ int main(int argc, char *argv[])
             printf("Received Peer Information: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
         }
 
-                
-
+       
         // 마지막 피어는 다른 연결을 시도하지 않습니다.
         if (num_peers != 0)
         {
@@ -298,7 +312,7 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
             }
         }
-      
+        //pthread_join(connect_thread,NULL);
         pthread_join(accept_thread, NULL);
 
     }
@@ -316,12 +330,19 @@ void send_peer_info(int client_sock, pkt *info_packets, int count)
         }
     }
 }
+
+
 void* acceptThreadFunc(void* arg) {
-    char* port = (char*) arg;
+   AcceptThreadArgs* args = (AcceptThreadArgs*) arg;
+    char* port = args->port;
+    int max_peers = args->max_peers;
+
     int listen_sock, client_sock;
+    int* client_socks = NULL;
+    int num_clients = 0;
     struct sockaddr_in listen_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    //printf("what is that?\n");
+
     // 소켓 생성
     if ((listen_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket");
@@ -331,8 +352,8 @@ void* acceptThreadFunc(void* arg) {
     // 주소 설정
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
-    listen_addr.sin_addr.s_addr = htonl(INADDR_ANY); // 자신의 모든 IP 주소에서 연결을 수락
-    listen_addr.sin_port = htons(atoi(port)); // 해당 포트에서 연결을 수락
+    listen_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    listen_addr.sin_port = htons(atoi(port));
 
     // 소켓에 주소 바인딩
     if (bind(listen_sock, (struct sockaddr*)&listen_addr, sizeof(listen_addr)) < 0) {
@@ -341,28 +362,41 @@ void* acceptThreadFunc(void* arg) {
     }
 
     // 연결 대기
-    if (listen(listen_sock, 5) < 0) { // 동시에 대기할 수 있는 연결 요청의 최대 수는 5
+    if (listen(listen_sock, 5) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-    //printf("dkanrjsk\n");
-    // 계속해서 연결을 수락
-    while (1) {
-        client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
+
+        // 계속해서 연결을 수락
+    while (num_clients < max_peers) {
+        int client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
         if (client_sock < 0) {
             perror("accept");
             continue;
         }
 
-        // 이 부분에서 client_sock와의 통신이나 필요한 작업을 수행할 수 있습니다.
-        // 예를 들어, 다른 피어로부터 받은 데이터를 처리하는 코드 등이 올 수 있습니다.
-        printf("succeed accept %d \n",client_sock);
-        close(client_sock);
+        client_socks = realloc(client_socks, (num_clients + 1) * sizeof(int));
+        if (!client_socks) {
+            perror("realloc");
+            exit(EXIT_FAILURE);
+        }
+
+        client_socks[num_clients] = client_sock;
+        printf("succeed accept %d at index %d\n", client_sock, num_clients);
+        num_clients++;
+        
+        //.. 기타코드
     }
 
+      // 모든 client_sock 및 listen_sock 종료
+    for (int i = 0; i < num_clients; i++) {
+        close(client_socks[i]);
+    }
+    free(client_socks);
     close(listen_sock);
     return NULL;
 }
+
 void *connectToOtherPeers(void *data)
 {
     
