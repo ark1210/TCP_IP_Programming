@@ -325,21 +325,21 @@ int main(int argc, char *argv[])
             printf("Received Peer Information: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
         }
 
-       
+       pthread_t connect_thread;
         // 마지막 피어는 다른 연결을 시도하지 않습니다.
         if (num_peers != 0)
         {
             pkt *peers_data = malloc(sizeof(pkt) * (num_peers));
             memcpy(peers_data, peers_info, sizeof(pkt) * (num_peers));
 
-            pthread_t connect_thread;
+           
             if (pthread_create(&connect_thread, NULL, connectToOtherPeers, (void *)peers_data) != 0)
             {
                 perror("Failed to create connect thread");
                 exit(EXIT_FAILURE);
             }
         }
-        //pthread_join(connect_thread,NULL);
+        pthread_join(connect_thread, NULL);
         pthread_join(accept_thread, NULL);
 
     }
@@ -393,34 +393,39 @@ void* acceptThreadFunc(void* arg) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
+    int temp =1;
 
-        // 계속해서 연결을 수락
-    while (1)
-     {
-        int client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
-        if (client_sock < 0) {
-            perror("accept");
-            continue;
-        }
-
-        // 배열의 크기를 증가시키기 위한 메모리 재할당
-        client_socks = realloc(client_socks, (num_clients + 1) * sizeof(int));
-        if (!client_socks) {
-            perror("realloc");
-            exit(EXIT_FAILURE);
-        }
-
-        client_socks[num_clients] = client_sock;
-        printf("succeed accept %d at index %d\n", client_sock, num_clients);
-        num_clients++;
-
-        // my_id 값을 기반으로 반복문 탈출 조건 추가
-        if (num_clients == my_id - 1) {
-            break;
-        }
+    if(my_id!=temp)
+    {
         
+            // 계속해서 연결을 수락
+        while (1)
+        {
+            int client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
+            if (client_sock < 0) {
+                perror("accept");
+                continue;
+            }
 
-        // ... [기타 코드]
+            // 배열의 크기를 증가시키기 위한 메모리 재할당
+            client_socks = realloc(client_socks, (num_clients + 1) * sizeof(int));
+            if (!client_socks) {
+                perror("realloc");
+                exit(EXIT_FAILURE);
+            }
+
+            client_socks[num_clients] = client_sock;
+            printf("succeed accept %d at index %d\n", client_sock, num_clients);
+            num_clients++;
+
+            // my_id 값을 기반으로 반복문 탈출 조건 추가
+            if (num_clients == my_id - 1) {
+                break;
+            }
+            
+
+            // ... [기타 코드]
+        }
     }
         //모든 client_sock 및 listen_sock 종료
           //  연결 종료 및 메모리 해제
@@ -428,7 +433,7 @@ void* acceptThreadFunc(void* arg) {
             close(client_socks[i]);
         }
         free(client_socks);
-    }
+}
    
 
 void *connectToOtherPeers(void *data)
