@@ -28,8 +28,16 @@ typedef struct {
 } AcceptThreadArgs;
 typedef struct {
     char name[256]; // 파일 이름
-    off_t size;     // 파일 크기
+    int size;     // 파일 크기
 } FileInfo;
+
+// typedef struct
+// {
+//     char content[BUF_SIZE];
+//     int read_size;
+// } pkt;
+
+
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
 void* acceptThreadFunc(void* arg);
@@ -82,7 +90,7 @@ int main(int argc, char *argv[])
             file_name[FILE_NAME_LENGTH - 1] = '\0';
             break;
         case 'g':
-            segment_size = atoi(optarg); // 인수 segment size에 할당
+            segment_size = atoi(optarg)*1024; // 인수 segment size에 할당
             break;
         case 'a':
 
@@ -246,6 +254,35 @@ int main(int argc, char *argv[])
 
         //해당 파일 전체 사이즈와 이름 있는 패킷 일단 먼저 전송함.
         write(client_socks[0], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1에게 전달.
+
+
+
+        FILE *fp;
+        char content[segment_size];
+        int read_size;
+        
+        int read_cnt = 0;
+        fp=fopen(file_inf.name,"rb");
+        while(1)
+        {
+            memset(&content,0,segment_size);
+            memset(&read_size,0,sizeof(int));
+            read_size = fread(content,1,segment_size,fp); // 1000kb 짜리 파일이 있는데 fread 한번 호출하면 segment size만큼
+            //읽어와서 content에게 넣음 그리고 읽은 양을 반환하는데, read size에는 처음에는 당연히 segment size만큼 읽었으니까 64kb가 읽은양이 반환됨.
+            write(client_socks[0],&read_size,sizeof(int));
+            write(client_socks[0],content,read_size); //즉 content를 보내는데 64kb만큼 보냄. 다시 while(1)로 돌아가서 memset을 하기에 초기화 시키고 그 64 바이트량을 받으려고 한다는것임.
+            read_cnt += read_size;
+            if(read_size < segment_size) //읽은 양이<segment size 보다 작으면
+            {
+                printf("total : %d\n", read_cnt);
+                break;
+            }
+            
+            
+
+        }
+
+        fclose(fp);
 
 
         
@@ -417,20 +454,66 @@ int main(int argc, char *argv[])
             FileInfo file_inf;
             int recv_len;
             int recv_cnt;
+            int recv_cnt2;
+            int recv_cnt3;
             char temp[sizeof(file_inf)];
+            char temp1[segment_size];
+
             // 서버로부터 파일(패킷(이름,사이즈)) 내용받아 파일로 저장
             recv_len=0;
             while (recv_len<sizeof(file_inf)) {
                 recv_cnt=read(sending_peer_sock, &temp[recv_len], sizeof(file_inf) - recv_len); //파일 목록 수신
-                //printf("%d\n",recv_cnt); 여기부분
+                printf("file received numbers : %d\n",recv_cnt); 
                 if(recv_cnt ==-1)
                     error_handling("read() error!");
                 recv_len+=recv_cnt;
                 
             }
-            temp[recv_len]=0;
+            
             memcpy(&file_inf,temp,sizeof(file_inf));
-            printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
+            printf("sizeof(file_int) : %ld\n", sizeof(file_inf));
+            printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
+
+            FILE *fp;
+            if((fp =fopen("test.jpg","wb")) == NULL)
+                perror("File Error()!");
+            int read_file_size;
+            int total_bytes = 0;
+            int read_size;
+            char temp2[sizeof(int)];
+            int read_cnt;
+
+            
+            while(1)
+            {
+                read(sending_peer_sock, &read_size, sizeof(int));
+                char content[read_size];
+
+                int recv_len1=0;
+                while(recv_len1<read_size)
+                {
+                    recv_cnt2=read(sending_peer_sock,&content[recv_len1],read_size-recv_len1);
+
+                    if(recv_cnt2 == -1)
+                        error_handling("read() error!");
+                    recv_len1+=recv_cnt2;
+                    printf("recv_len1 : %d, recv_cnt2 : %d\n", recv_len1, recv_cnt2);
+                }
+                printf("read_size : %d", read_size);
+                
+
+
+                read_cnt = fwrite(content,1,read_size,fp);
+                total_bytes +=read_cnt;
+                printf("%d / %d\n", total_bytes, file_inf.size);
+                if(total_bytes>=file_inf.size)
+                    break;
+
+            }
+            fclose(fp);
+            printf("Download complete\n");
+            
+
         }
 
     }
