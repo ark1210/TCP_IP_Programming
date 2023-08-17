@@ -26,11 +26,6 @@ typedef struct {
     int* client_socks; // 이것은 동적 배열로, accept된 클라이언트 소켓들의 목록을 담게 됩니다.
     int my_id;
 } AcceptThreadArgs;
-typedef struct
-{
-    char *content ;
-    int read_size;
-} packet;
 typedef struct {
     char name[256]; // 파일 이름
     off_t size;     // 파일 크기
@@ -39,6 +34,7 @@ void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
 void* acceptThreadFunc(void* arg);
 void *connectToOtherPeers(void *data);
+void error_handling(char *message);
 int main(int argc, char *argv[])
 {
     int id = 0; // 초기값은 -1이나 0으로 설정, 혹은 무효한 값으로 설정
@@ -66,7 +62,6 @@ int main(int argc, char *argv[])
 
 
     */
-  
     int next_arg = 0;
 
     while ((opt = getopt(argc, argv, "srn:f:g:a:p:")) != -1)
@@ -87,7 +82,7 @@ int main(int argc, char *argv[])
             file_name[FILE_NAME_LENGTH - 1] = '\0';
             break;
         case 'g':
-            segment_size = atoi(optarg)*1024; // 인수 segment size에 할당
+            segment_size = atoi(optarg); // 인수 segment size에 할당
             break;
         case 'a':
 
@@ -126,13 +121,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Please specify either -s (sending peer) or -r (receiving peer).\n");
         exit(EXIT_FAILURE);
     }
-   
-    
 
     // 옵션에 따른 동작을 추가합니다.
     if (peer == 's')
     {
-    
         // 파일 정보를 가져오기
         FileInfo file_inf;
         struct stat file_stat;
@@ -240,89 +232,19 @@ int main(int argc, char *argv[])
         char init_complete_msg[14]; // "init complete" 문자열의 크기는 13 + 1(null) = 14
         for (int i = 0; i < client_count; i++)
         {
-            int bytes_received = read(client_socks[i], init_complete_msg, 13); // 13 bytes를 읽습니다.
+            int bytes_received = read(client_socks[i], init_complete_msg, 14); // 13 bytes를 읽습니다.
             init_complete_msg[bytes_received] = '\0'; // 문자열 종료를 보장합니다.
 
             printf("expected message received from Receiving Peer : %s %d\n",init_complete_msg, i+1);
-                close(client_socks[i]);
-                continue;
+                // close(client_socks[i]);
+                 continue;
             // 해당 Receiving Peer의 초기화가 완료되었음을 확인했습니다.
         }
-        
-    // // 파일 정보(사이즈, 해당 파일 크기) 패킷 일단 먼저 전송
-    // write(client_socks[0], &file_inf, sizeof(file_inf));
+
+        //해당 파일 전체 사이즈와 이름 있는 패킷 일단 먼저 전송함.
+        write(client_socks[0], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1에게 전달.
 
 
-    //     //해당 파일 리시빙 피어에게 전송
-    //     FILE *fp;
-    //     fp = fopen(file_name, "rb");
-    //     if (fp == NULL) {
-    //         perror("Failed to open file");
-    //         exit(1);
-    //     }
-
-    //     packet *packet1 = (packet*)malloc(sizeof(packet));
-    //     if (!packet1) {
-    //         perror("Failed to allocate memory for packet");
-    //         exit(1);
-    //     }
-
-    //     packet1->content = (char*)malloc(segment_size);
-    //     if (!packet1->content) {
-    //         perror("Failed to allocate memory for packet content");
-    //         free(packet1);
-    //         exit(1);
-    //     }
-
-    //     while (1)
-    //     {
-    //         memset(packet1->content, 0, segment_size);
-    //         int read_cnt = fread(packet1->content, 1, segment_size, fp); 
-    //         packet1->read_size = read_cnt;
-
-    //         if (read_cnt < segment_size) // 마지막 읽은 데이터일 경우
-    //         {
-    //             write(client_socks[0], packet1, sizeof(packet) + read_cnt); // 구조체의 크기와 실제로 읽은 바이트만큼만 전송합니다.
-    //             break;
-    //         }
-    //         write(client_socks[0], packet1, sizeof(packet) + segment_size);// 구조체의 크기와 segment_size만큼 전송합니다.
-    //     }
-
-    //     fclose(fp);
-    //     free(packet1->content);
-    //     free(packet1);
-
-    //     FILE *fp;
-    //     fp=fopen(file_name,"rb");
-    //     packet * packet1 = (packet*)malloc(sizeof(packet));
-    //     packet1->content = (char*)malloc(segment_size); //패킷 구조체 생성해서 mallock 함수로 할당
-    //     printf("packet1's size : %ld ",sizeof(packet1));
-    //     printf("packet1's size : %ld ",sizeof(*packet1));
-    //     // while (1)
-    //     // {
-    //     //     memset(packet1, 0, sizeof(*packet1));
-    //     //     read_cnt = fread(packet->content, 1, BUF_SIZE, fp); // 패킷 구조체의 content에 파일바이너리를 1004바이트씩(1,BUF_SIZE니까 content에는 1000바이트, size는 4바이트)담기
-    //     //     packet->read_size = read_cnt;                       // 읽은양을 size 변수에 넣어줌.
-    //     //     // printf("read_size : %d", packet->read_size);
-
-    //     //     if (read_cnt < BUF_SIZE) // 예를들어 읽은양을 자꾸 자꾸 보내주니까, 이제 1000씩 읽고 마지막 바이트량이 756 남았을때 --> content는 1000 size 이니까
-    //     //     {
-    //     //         write(clnt_sd, packet, sizeof(pkt)); // 결국 일단 1004바이트를 보내주긴함. 근데 pkt 안에는 size 즉, 읽은양이 756이 기록되어있음.
-    //     //         break;
-    //     //     }
-    //     //     write(clnt_sd, packet, sizeof(pkt));
-    //     // }
-    //     // 오류 방지 버퍼 지우기 위해 0으로 memset하기
-    //     // memset(buf, 0, BUF_SIZE);
-    //     // write(clnt_sd, buf, BUF_SIZE);  // 0값 전송
-
-    // //     fclose(fp);
-    // // }
-
-        // packet * packet2 = (packet*)malloc(sizeof(packet));
-        // packet2->content = (packet*)malloc(segment_size);
-
-        // return 0;
         
     }
 
@@ -481,76 +403,31 @@ int main(int argc, char *argv[])
             perror("Failed to send init complete message");
             exit(EXIT_FAILURE);
         }
-    // if(my_id ==1)
-    // {
-    //     // 파일 정보 받기
-    //     FileInfo file_inf;
-    //     int recv_len;
-    //     int recv_cnt;
 
-    //     recv_len = read(sending_peer_sock, &file_inf, sizeof(file_inf));
-    //     if (recv_len != sizeof(file_inf)) {
-    //         perror("Failed to receive complete file info");
-    //         exit(1);
-    //     }
+        
+        if(my_id ==1)
+        {
+            FileInfo file_inf;
+            int recv_len;
+            int recv_cnt;
+            char temp[sizeof(file_inf)];
+            // 서버로부터 파일(패킷(이름,사이즈)) 내용받아 파일로 저장
+            recv_len=0;
+            while (recv_len<sizeof(file_inf)) {
+                recv_cnt=read(sending_peer_sock, &temp[recv_len], sizeof(file_inf) - recv_len); //파일 목록 수신
+                //printf("%d\n",recv_cnt); 여기부분
+                if(recv_cnt ==-1)
+                    error_handling("read() error!");
+                recv_len+=recv_cnt;
+                
+            }
+            temp[recv_len]=0;
+            memcpy(&file_inf,temp,sizeof(file_inf));
+            printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
+        }
 
-    //     // 파일 생성/오픈
-    //     FILE *fp = fopen(file_inf.name, "wb");
-    //     if (fp == NULL) {
-    //         perror("Failed to open file for writing");
-    //         exit(1);
-    //     }
-
-    //     packet *packet2 = (packet*)malloc(sizeof(packet));
-    //     if (!packet2) {
-    //         perror("Failed to allocate memory for packet");
-    //         exit(1);
-    //     }
-
-    //     packet2->content = (char*)malloc(segment_size);
-    //     if (!packet2->content) {
-    //         perror("Failed to allocate memory for packet content");
-    //         free(packet2);
-    //         exit(1);
-    //     }
-
-    //     int total_received = 0;  // 실제로 받은 파일의 총 바이트 수를 저장할 변수
-    //     while (total_received < file_inf.size)
-    //     {
-    //         memset(packet2->content, 0, segment_size);
-
-    //         // 헤더 (packet1 구조체의 일부) 받기
-    //         recv_len = read(sending_peer_sock, packet2, sizeof(packet));
-    //         if (recv_len < sizeof(packet)) {
-    //             perror("Failed to receive complete packet header");
-    //             exit(1);
-    //         }
-
-    //         // 실제 파일 내용 받기
-    //         recv_len = read(sending_peer_sock, packet2->content, packet2->read_size);
-    //         if (recv_len < packet2->read_size) {
-    //             perror("Failed to receive complete file content");
-    //             exit(1);
-    //         }
-
-    //         fwrite(packet2->content, 1, packet2->read_size, fp);
-    //         total_received += packet2->read_size;
-
-    //         printf("%d / %ld\n", total_received, file_inf.size);  // 실제로 받은 바이트 수와 전체 파일 크기를 출력
-    //     }
-
-
-    //     fclose(fp);
-    //     free(packet2->content);
-    //     free(packet2);
-
-    //     printf("File received successfully!\n");
-
-    //     return 0;
-
-    //     }
-    // }
     }
+    
 }
 
 void send_peer_info(int client_sock, pkt *info_packets, int count)
@@ -642,4 +519,9 @@ void *connectToOtherPeers(void *data)
     }
     free(data);
     return NULL;
+}
+void error_handling(char *message) {
+    fputs(message, stderr);
+    fputc('\n', stderr);
+    exit(1);
 }
