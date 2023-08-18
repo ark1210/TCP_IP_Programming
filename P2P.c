@@ -254,43 +254,46 @@ int main(int argc, char *argv[])
         }
 
         //해당 파일 전체 사이즈와 이름 있는 패킷 일단 먼저 전송함.
-        write(client_socks[0], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1에게 전달.
-
-
-
-        FILE *fp;
-        char content[segment_size];
-        int read_size;
-        
-        
-        fp=fopen(file_inf.name,"rb");
-        while(1)
-        {
-            memset(&content,0,segment_size);
-            memset(&read_size,0,sizeof(int));
-            read_size = fread(content,1,segment_size,fp); //fread는 (1,2,3,4)이렇게 4개인수가 있음. 즉 fp 부터 <--- 해석하면됨. 1000kb 짜리 파일(fp)이 있는데 fread 한번 호출하면 segment size만큼
-            //읽어와서 content에게 넣음 그리고 읽은 양을 반환하는데, read size에는 당연히 segment size만큼 읽었으니까 64kb가 읽은양이 반환됨.
-
-
-            if(read_size < segment_size) //읽은 양이<segment size 보다 작으면 1000kb 파일이면, 지금 40kb남았음. 그럼 위에서, 즉 fread에서 읽은양은 40kb일것임.
-            {
-                write(client_socks[0],&read_size,sizeof(int)); //마지막 남는양을 또 보내줌,  전송하면 서버에서는 읽은양을 계속 받으면서 더하면서 총 바이트수랑 비교하려고 하는것임.
-                write(client_socks[0],content,read_size); //애는 40kb 읽은양을 보내주는거임. 즉 40가 남았으니 content에는 40이 있고, 이 content를 전송함.
-                //그래서 write인수 3번째에는 readsize만큼 보내는거임. 2번째 인수는 2번째 인수내용를 보내겠다는 것임.
-                //즉 합치면 2번째인수내용을 3번째 인수만큼 보내겠다.
-
-                //write는 3번째인수만큼 딱 보냄. 정확히 보냄 앤 무적임 read랑 달리 데이터 경계성이 명확함.
-                break; //이제 break;
-            }
-            write(client_socks[0],&read_size,sizeof(int)); //4바이트만큼 int가 4바이트니까 read_size를 보냄.
-            write(client_socks[0],content,read_size); //즉 content를 보내는데 64kb만큼 보냄.왜? read_size만큼 보내니까, 다시 while(1)로 돌아가서 memset을 하기에 초기화 시키고 그 64 바이트량을 받으려고 한다는것임.
-            
-
-            
-
+        for (int i = 0; i < client_count; i++) {
+            write(client_socks[i], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1,2,3에게 전달.
         }
 
-        fclose(fp);
+
+        // FILE *fp;
+        // char content[segment_size];
+        // int read_size;
+        
+        // int current_client_index = 0;
+        // fp=fopen(file_inf.name,"rb");
+        // while(1)
+        // {
+        //     memset(&content,0,segment_size);
+        //     memset(&read_size,0,sizeof(int));
+        //     read_size = fread(content,1,segment_size,fp); //fread는 (1,2,3,4)이렇게 4개인수가 있음. 즉 fp 부터 <--- 해석하면됨. 1000kb 짜리 파일(fp)이 있는데 fread 한번 호출하면 segment size만큼
+        //     //읽어와서 content에게 넣음 그리고 읽은 양을 반환하는데, read size에는 당연히 segment size만큼 읽었으니까 64kb가 읽은양이 반환됨.
+
+
+        //     if(read_size < segment_size) //읽은 양이<segment size 보다 작으면 1000kb 파일이면, 지금 40kb남았음. 그럼 위에서, 즉 fread에서 읽은양은 40kb일것임.
+        //     {
+        //         write(client_socks[current_client_index],&read_size,sizeof(int)); //마지막 남는양을 또 보내줌,  전송하면 서버에서는 읽은양을 계속 받으면서 더하면서 총 바이트수랑 비교하려고 하는것임.
+        //         write(client_socks[current_client_index],content,read_size); //애는 40kb 읽은양을 보내주는거임. 즉 40가 남았으니 content에는 40이 있고, 이 content를 전송함.
+        //         //그래서 write인수 3번째에는 readsize만큼 보내는거임. 2번째 인수는 2번째 인수내용를 보내겠다는 것임.
+        //         //즉 합치면 2번째인수내용을 3번째 인수만큼 보내겠다.
+
+        //         //write는 3번째인수만큼 딱 보냄. 정확히 보냄 앤 무적임 read랑 달리 데이터 경계성이 명확함.
+        //         break; //이제 break;
+        //     }
+        //     write(client_socks[current_client_index],&read_size,sizeof(int)); //4바이트만큼 int가 4바이트니까 read_size를 보냄.
+        //     write(client_socks[current_client_index],content,read_size); //즉 content를 보내는데 64kb만큼 보냄.왜? read_size만큼 보내니까, 다시 while(1)로 돌아가서 memset을 하기에 초기화 시키고 그 64 바이트량을 받으려고 한다는것임.
+        //     // 다음 클라이언트로 전환 (만약 마지막 클라이언트라면 처음 클라이언트로 다시 돌아감)
+        //     current_client_index = (current_client_index + 1) % client_count;
+            
+
+            
+
+        // }
+
+        // fclose(fp);
 
 
         
@@ -457,8 +460,8 @@ int main(int argc, char *argv[])
         }
 
         
-        if(my_id ==1)
-        {
+        
+        
             FileInfo file_inf;
             int recv_len;
             int recv_cnt;
@@ -482,55 +485,55 @@ int main(int argc, char *argv[])
             printf("sizeof(file_int) : %ld\n", sizeof(file_inf));
             printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
 
-            FILE *fp;
-            fp =fopen("test.jpg","wb");
-            int read_file_size;
-            int total_bytes = 0;
+            // FILE *fp;
+            // fp =fopen("test.jpg","wb");
+            // int read_file_size;
+            // int total_bytes = 0;
             
-            char content[MY_SEGMENT];
-            int read_size;
-            int recv_cnt2;
-            int read_cnt;
+            // char content[MY_SEGMENT];
+            // int read_size;
+            // int recv_cnt2;
+            // int read_cnt;
 
             
-            while(1)
-            {
-                memset(&content,0,MY_SEGMENT); 
-                memset(&read_size,0,sizeof(int));
+            // while(1)
+            // {
+            //     memset(&content,0,MY_SEGMENT); 
+            //     memset(&read_size,0,sizeof(int));
 
-                read(sending_peer_sock, &read_size, sizeof(int)); //int받을땐 굳이 윤성우 방법 안써도 됨.
+            //     read(sending_peer_sock, &read_size, sizeof(int)); //int받을땐 굳이 윤성우 방법 안써도 됨.
 
-                //윤성우 방법 시작
-                int recv_len1=0; //받은 양
-                while(recv_len1<read_size) //받은 양< 서버로부터 실제 읽은 양(서버에서 read size를 보냈음)
-                {
-                    recv_cnt2=read(sending_peer_sock,&content[recv_len1],MY_SEGMENT-recv_len1);
-                    //read 인수를 잘보자, 해당 my_segment -0 하면 그 크기만큼 content[0==recv_len1]에서 시작해서 읽어온다(저장) 라는뜻
-                    //읽어온 반환값을 recv_cnt2에 넣기 즉, recv_cnt2는 읽은 양이 될거임. //근데 read함수는 데이터 경계성이 모호해서 그 크기만큼을 읽어오지 않고 절반만 읽어옴. 
-                    //즉, 지금 64kb를 보냈는데 32만 받았다고 가정해보자
-                    if(recv_cnt2 == -1)
-                    error_handling("read() error!");
-                    recv_len1+=recv_cnt2; //recv_len1은 받은양 +=읽은양 즉, 읽은양임. 32kb일거고
-                }//따라서 다시 조건문 recv_len1 <read_size를 보면 실제 지금 상황에서 읽은 양(32) <서버로부터 읽은양(64)면 다시 반복
-                    //while문 빠져나오면 딱 서버에서 64만큼 보냈으니까 64를 받은것임. 그리고 다시 큰 while(1)로 돌아가서 초기화시키고 64를 받을 준비한다는 거임.
-                    //recv_cnt2=read(sending_peer_sock,&content[recv_len1],MY_SEGMENT-recv_len1);
-                    //content[recv_len1]여기서 recv_len1은 읽은양이니까 64kb받은 포인터 지점부터 이제 새로 받아들인다는 것임.
+            //     //윤성우 방법 시작
+            //     int recv_len1=0; //받은 양
+            //     while(recv_len1<read_size) //받은 양< 서버로부터 실제 읽은 양(서버에서 read size를 보냈음)
+            //     {
+            //         recv_cnt2=read(sending_peer_sock,&content[recv_len1],MY_SEGMENT-recv_len1);
+            //         //read 인수를 잘보자, 해당 my_segment -0 하면 그 크기만큼 content[0==recv_len1]에서 시작해서 읽어온다(저장) 라는뜻
+            //         //읽어온 반환값을 recv_cnt2에 넣기 즉, recv_cnt2는 읽은 양이 될거임. //근데 read함수는 데이터 경계성이 모호해서 그 크기만큼을 읽어오지 않고 절반만 읽어옴. 
+            //         //즉, 지금 64kb를 보냈는데 32만 받았다고 가정해보자
+            //         if(recv_cnt2 == -1)
+            //         error_handling("read() error!");
+            //         recv_len1+=recv_cnt2; //recv_len1은 받은양 +=읽은양 즉, 읽은양임. 32kb일거고
+            //     }//따라서 다시 조건문 recv_len1 <read_size를 보면 실제 지금 상황에서 읽은 양(32) <서버로부터 읽은양(64)면 다시 반복
+            //         //while문 빠져나오면 딱 서버에서 64만큼 보냈으니까 64를 받은것임. 그리고 다시 큰 while(1)로 돌아가서 초기화시키고 64를 받을 준비한다는 거임.
+            //         //recv_cnt2=read(sending_peer_sock,&content[recv_len1],MY_SEGMENT-recv_len1);
+            //         //content[recv_len1]여기서 recv_len1은 읽은양이니까 64kb받은 포인터 지점부터 이제 새로 받아들인다는 것임.
                 
                 
 
 
-                read_cnt = fwrite(content,1,read_size,fp); //이부분 부터는 위를 이해하면 충분히 이해가능(석민이형 사진 참고하면서 생각하기)
-                total_bytes +=read_cnt;
-                printf("%d / %d\n", total_bytes, file_inf.size);
-                if(total_bytes>=file_inf.size)
-                    break;
+            //     read_cnt = fwrite(content,1,read_size,fp); //이부분 부터는 위를 이해하면 충분히 이해가능(석민이형 사진 참고하면서 생각하기)
+            //     total_bytes +=read_cnt;
+            //     printf("%d / %d\n", total_bytes, file_inf.size);
+            //     if(total_bytes>=file_inf.size)
+            //         break;
 
-            }
-            fclose(fp);
-            printf("Download complete\n");
+            // }
+            // fclose(fp);
+            // printf("Download complete\n");
             
 
-        }
+        
 
     }
     
