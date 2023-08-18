@@ -14,6 +14,7 @@
 #define INFO_SIZE 128
 #define MAX_RECV_PEER 10
 #define MAX_PEERS 10
+#define MY_SEGMENT 65536
 // Packet 구조체 정의
 typedef struct
 {
@@ -28,8 +29,16 @@ typedef struct {
 } AcceptThreadArgs;
 typedef struct {
     char name[256]; // 파일 이름
-    off_t size;     // 파일 크기
+    int size;     // 파일 크기
 } FileInfo;
+
+// typedef struct
+// {
+//     char content[BUF_SIZE];
+//     int read_size;
+// } pkt;
+int peer_socks[MAX_PEERS]; // 연결된 피어들의 소켓 디스크립터 저장
+
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
 void* acceptThreadFunc(void* arg);
@@ -82,7 +91,7 @@ int main(int argc, char *argv[])
             file_name[FILE_NAME_LENGTH - 1] = '\0';
             break;
         case 'g':
-            segment_size = atoi(optarg); // 인수 segment size에 할당
+            segment_size = atoi(optarg)*1024; // 인수 segment size에 할당
             break;
         case 'a':
 
@@ -157,6 +166,9 @@ int main(int argc, char *argv[])
         listen_addr.sin_family = AF_INET;
         listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         listen_addr.sin_port = htons(atoi(port));
+
+        int reuse = 1;
+        setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
         // Bind
         if (bind(listen_sock, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0)
@@ -242,7 +254,49 @@ int main(int argc, char *argv[])
         }
 
         //해당 파일 전체 사이즈와 이름 있는 패킷 일단 먼저 전송함.
-        write(client_socks[0], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1에게 전달.
+        for (int i = 0; i < client_count; i++) {
+            write(client_socks[i], &file_inf, sizeof(file_inf)); // 일단 리시빙 피어 1,2,3에게 전달.
+        }
+
+
+        FILE *fp;
+        char content[segment_size];
+        int read_size;
+        
+        int current_client_index = 0;
+        fp=fopen(file_inf.name,"rb");
+        while(1)
+        {
+            memset(&content,0,segment_size);
+            memset(&read_size,0,sizeof(int));
+            read_size = fread(content,1,segment_size,fp); 
+          
+
+
+            if(read_size < segment_size) 
+            {
+                write(client_socks[current_client_index],&read_size,sizeof(int));
+                write(client_socks[current_client_index],content,read_size); 
+
+                
+                // 종료 신호 전송
+                int end_signal = -1;
+                for (int i = 0; i < client_count; i++) {
+                    write(client_socks[i], &end_signal, sizeof(int));
+                }
+                break;  
+            }
+            write(client_socks[current_client_index],&read_size,sizeof(int)); 
+            write(client_socks[current_client_index],content,read_size); 
+            
+            current_client_index = (current_client_index + 1) % client_count;
+            
+
+            
+
+        }
+
+        fclose(fp);
 
 
         
@@ -252,6 +306,8 @@ int main(int argc, char *argv[])
     {
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
+        //peers_socks 초기화
+        memset(peer_socks, -1, sizeof(peer_socks));
         // Setup for acceptThreadFunc
         int listen_sock;
         int* client_socks = NULL; // 동적 배열로 선언
@@ -269,6 +325,9 @@ int main(int argc, char *argv[])
         listen_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
         listen_addr.sin_port = htons(atoi(port));
 
+        
+        int reuse = 1;
+        setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
         // 소켓에 주소 바인딩
         if (bind(listen_sock, (struct sockaddr*)&listen_addr, sizeof(listen_addr)) < 0) {
             perror("bind");
@@ -390,41 +449,110 @@ int main(int argc, char *argv[])
                 perror("Failed to create connect thread");
                 exit(EXIT_FAILURE);
             }
+            pthread_join(connect_thread, NULL);
         }
-        pthread_join(connect_thread, NULL);
-        pthread_join(accept_thread, NULL);
+        
+            pthread_join(accept_thread, NULL);
 
-        // "init complete" 문자열을 sending peer에게 전송
-        const char *message = "init complete";
-        ssize_t bytes_ssent = write(sending_peer_sock, message, strlen(message));
-        printf("%s\n",message);
-        if (bytes_ssent < 0) 
-        {
-            perror("Failed to send init complete message");
-            exit(EXIT_FAILURE);
-        }
+
+            int peer_count=0; //peer_socks에 들어있는 연결된 피어 개수
+            // 연결된 피어들의 수 카운트
+            for (int i = 0; i < MAX_PEERS; i++)
+            {
+                if (peer_socks[i] != -1) {  // -1이 아닌 경우에만 카운트 증가
+                    peer_count++;
+                }
+            }
+
+            printf("Number of connected peers: %d\n", peer_count);
+
+
+            // "init complete" 문자열을 sending peer에게 전송
+            const char *message = "init complete";
+            ssize_t bytes_ssent = write(sending_peer_sock, message, strlen(message));
+            printf("%s\n",message);
+            if (bytes_ssent < 0) 
+            {
+                perror("Failed to send init complete message");
+                exit(EXIT_FAILURE);
+            }
 
         
-        if(my_id ==1)
-        {
+        
+
             FileInfo file_inf;
             int recv_len;
             int recv_cnt;
+           
+            //int recv_cnt3;
             char temp[sizeof(file_inf)];
+           
+
             // 서버로부터 파일(패킷(이름,사이즈)) 내용받아 파일로 저장
             recv_len=0;
             while (recv_len<sizeof(file_inf)) {
                 recv_cnt=read(sending_peer_sock, &temp[recv_len], sizeof(file_inf) - recv_len); //파일 목록 수신
-                //printf("%d\n",recv_cnt); 여기부분
+                printf("file received numbers : %d\n",recv_cnt); 
                 if(recv_cnt ==-1)
                     error_handling("read() error!");
                 recv_len+=recv_cnt;
                 
             }
-            temp[recv_len]=0;
+            
             memcpy(&file_inf,temp,sizeof(file_inf));
-            printf("File: %s (%ld bytes)\n", file_inf.name, file_inf.size);
-        }
+            printf("sizeof(file_int) : %ld\n", sizeof(file_inf));
+            printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
+
+            FILE *fp;
+            fp =fopen("test.mp4","wb");
+            int read_file_size;
+            int total_bytes = 0;
+            
+            char content[MY_SEGMENT];
+            int read_size;
+            int recv_cnt2;
+            int read_cnt;
+
+            
+            while(1)
+            {
+                //memset(&content,0,MY_SEGMENT); 
+                //memset(&read_size,0,sizeof(int));
+               
+                read(sending_peer_sock, &read_size, sizeof(int)); //int받을땐 굳이 윤성우 방법 안써도 됨.
+
+                if(read_size == -1)
+                {
+                    break;
+                }
+ 
+                //윤성우 방법 시작
+                int recv_len1=0; //받은 양
+                while(recv_len1<read_size)
+                {
+                    recv_cnt2=read(sending_peer_sock,&content[recv_len1],read_size-recv_len1);
+                    
+                
+                 
+                    if(recv_cnt2 == -1)
+                    error_handling("read() error!");
+                    recv_len1+=recv_cnt2; 
+                }
+                
+                
+
+
+                read_cnt = fwrite(content,1,read_size,fp); 
+                total_bytes +=read_cnt;
+                printf("%d / %d\n", total_bytes, file_inf.size);
+               
+
+            }
+        fclose(fp);
+        printf("Download complete\n");
+            
+
+        
 
     }
     
@@ -514,7 +642,9 @@ void *connectToOtherPeers(void *data)
             }
 
             printf("Connected to Peer: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
-            close(peer_sock);
+            // 연결된 소켓 디스크립터 저장
+            peer_socks[i] = peer_sock;
+            //close(peer_sock);
         
     }
     free(data);
