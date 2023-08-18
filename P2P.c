@@ -37,7 +37,7 @@ typedef struct {
 //     char content[BUF_SIZE];
 //     int read_size;
 // } pkt;
-
+int peer_socks[MAX_PEERS]; // 연결된 피어들의 소켓 디스크립터 저장
 
 void *listening_thread(void *arg);
 void send_peer_info(int client_sock, pkt *info_packets, int count);
@@ -306,6 +306,8 @@ int main(int argc, char *argv[])
     {
         // Receiving Peer 코드를 여기에 작성합니다.
         printf("Running as Receiving Peer connecting to IP %s and port %s\n", ip, opponent_port);
+        //peers_socks 초기화
+        memset(peer_socks, -1, sizeof(peer_socks));
         // Setup for acceptThreadFunc
         int listen_sock;
         int* client_socks = NULL; // 동적 배열로 선언
@@ -450,21 +452,34 @@ int main(int argc, char *argv[])
             pthread_join(connect_thread, NULL);
         }
         
-        pthread_join(accept_thread, NULL);
+            pthread_join(accept_thread, NULL);
 
-        // "init complete" 문자열을 sending peer에게 전송
-        const char *message = "init complete";
-        ssize_t bytes_ssent = write(sending_peer_sock, message, strlen(message));
-        printf("%s\n",message);
-        if (bytes_ssent < 0) 
-        {
-            perror("Failed to send init complete message");
-            exit(EXIT_FAILURE);
-        }
+
+            int peer_count=0; //peer_socks에 들어있는 연결된 피어 개수
+            // 연결된 피어들의 수 카운트
+            for (int i = 0; i < MAX_PEERS; i++)
+            {
+                if (peer_socks[i] != -1) {  // -1이 아닌 경우에만 카운트 증가
+                    peer_count++;
+                }
+            }
+
+            printf("Number of connected peers: %d\n", peer_count);
+
+
+            // "init complete" 문자열을 sending peer에게 전송
+            const char *message = "init complete";
+            ssize_t bytes_ssent = write(sending_peer_sock, message, strlen(message));
+            printf("%s\n",message);
+            if (bytes_ssent < 0) 
+            {
+                perror("Failed to send init complete message");
+                exit(EXIT_FAILURE);
+            }
 
         
         
-        
+
             FileInfo file_inf;
             int recv_len;
             int recv_cnt;
@@ -489,7 +504,7 @@ int main(int argc, char *argv[])
             printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
 
             FILE *fp;
-            fp =fopen("test.jpg","wb");
+            fp =fopen("test.mp4","wb");
             int read_file_size;
             int total_bytes = 0;
             
@@ -533,8 +548,8 @@ int main(int argc, char *argv[])
                
 
             }
-            fclose(fp);
-            printf("Download complete\n");
+        fclose(fp);
+        printf("Download complete\n");
             
 
         
@@ -627,7 +642,9 @@ void *connectToOtherPeers(void *data)
             }
 
             printf("Connected to Peer: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
-            close(peer_sock);
+            // 연결된 소켓 디스크립터 저장
+            peer_socks[i] = peer_sock;
+            //close(peer_sock);
         
     }
     free(data);
