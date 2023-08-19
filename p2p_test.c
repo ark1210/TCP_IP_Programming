@@ -40,8 +40,8 @@ typedef struct { //쓰레드 1 인수
 } ReceiverArgs;
 
 typedef struct { //쓰레드 2 인수
+    int sending_peer_sock;
     int my_id;
-    
     
     FileInfo file_inf;
 } ReceiverPeerArgs;
@@ -534,9 +534,8 @@ int main(int argc, char *argv[])
             printf("sizeof(file_int) : %ld\n", sizeof(file_inf));
             printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
 
-          
 
-            pthread_t thread_id;
+         pthread_t thread_id;
             ReceiverArgs args1;
             args1.sending_peer_sock = sending_peer_sock;
             args1.my_id = my_id;
@@ -577,16 +576,8 @@ int main(int argc, char *argv[])
         pthread_join(thread_id, NULL);
         pthread_join(t2, NULL);
         pthread_join(t3, NULL);
-
-
-            
-
-        
-
+    
     }
-    
-   return 0; 
-    
 }
 
 void send_peer_info(int client_sock, pkt *info_packets, int count)
@@ -681,96 +672,103 @@ void *connectToOtherPeers(void *data)
     free(data);
     return NULL;
 }
-void *receiver_from_sending_peer(void *arg) {
-
-
+void* receiver_from_sending_peer(void *arg)
+{
     ReceiverArgs *args = (ReceiverArgs *)arg;
     int sending_peer_sock = args->sending_peer_sock;
     int my_id = args->my_id;
     //int* client_socks = args->client_socks;
     FileInfo file_inf = args->file_inf;
 
-
     FILE *fp;
-    fp = fopen("test.mp4", "wb");
-    if (fp == NULL) {
-        perror("Failed to open file");
-        pthread_exit(NULL);
-    }
-
     int read_file_size;
     int total_bytes = 0;
-    
+
     char content[MY_SEGMENT];
     int read_size;
     int recv_cnt2;
     int read_cnt;
-    while (1)
+
+    // my_id 값에 따른 파일명 결정
+    char filename[20];
+    sprintf(filename, "test%d.mp4", my_id);
+    fp = fopen(filename, "wb");
+
+    while(1)
     {
-        read(sending_peer_sock, &read_size, sizeof(int));
+        read(sending_peer_sock, &read_size, sizeof(int)); 
 
-        if (read_size != -1) {
-            // 윤성우 방법 시작
-            int recv_len1 = 0;
-            while (recv_len1 < read_size) {
-                recv_cnt2 = read(sending_peer_sock, &content[recv_len1], read_size - recv_len1);
-                if (recv_cnt2 == -1) {
-                    perror("read() error");
-                    pthread_exit(NULL);
-                }
-                recv_len1 += recv_cnt2; 
-            }
-
-            // 파일에 쓰기
-            read_cnt = fwrite(content, 1, read_size, fp); 
-            total_bytes += read_cnt;
-            printf("%d / %d\n", total_bytes, file_inf.size);
-        }
-
-        if (read_size == -1) 
+        if(read_size == -1) //read_size가 -1이면 다른애들한테 전송도 end_of_signal 주고 break시키기.
         {
-                    // 연결된 모든 리시빙 피어들에게 데이터 전송
-                for (int i = 0; i < MAX_PEERS; i++) {
-                    if (my_id == 1) {
-                        // 리시빙 피어 1의 경우, peer_socks로만 데이터를 전송
-                        if (peer_socks[i] != -1) {
-                             // 종료 신호 전송
-                            int end_signal = -1;
-                            write(peer_socks[i], &end_signal, sizeof(int));
-                            
-                            
-                            
-                        }
-                    } else {
-                        // 리시빙 피어 2와 3의 경우, client_socks로 데이터를 전송
-                        for (int j = 0; j < my_id - 1; j++) {
-                            if (r_client_socks[j] != -1) {
-                                // 종료 신호 전송
-                                int end_signal = -1;
-                                write(r_client_socks[j], &end_signal, sizeof(int));
+            // 연결된 모든 리시빙 피어들에게 데이터 전송
+            for (int i = 0; i < MAX_PEERS; i++) 
+            {
                 
-                            }
-                        }
-                            
-                        // 리시빙 피어 2의 경우, peer_socks로도 데이터를 전송
-                        if (my_id == 2 && peer_socks[i] != -1) {
+                if (my_id == 1) {
+                    // 리시빙 피어 1의 경우, peer_socks로만 데이터를 전송
+                    if (peer_socks[i] != -1) {
+                        // 종료 신호 전송
+                        int end_signal = -1;
+                        write(peer_socks[i], &end_signal, sizeof(int));
+                        
+                    
+                        
+                    }
+                } else {
+                    // 리시빙 피어 2와 3의 경우, client_socks로 데이터를 전송
+                    for (int j = 0; j < my_id - 1; j++) {
+                        if (r_client_socks[j] != -1) {
+
                             // 종료 신호 전송
                             int end_signal = -1;
-                            write(peer_socks[i], &end_signal, sizeof(int));
-                            
+                            write(r_client_socks[j], &end_signal, sizeof(int));
+                        
+                        
                             
                         }
                     }
+                        
+                    // 리시빙 피어 2의 경우, peer_socks로도 데이터를 전송
+                    if (my_id == 2 && peer_socks[i] != -1) {
+
+                        // 종료 신호 전송
+                        int end_signal = -1;
+                        write(peer_socks[i], &end_signal, sizeof(int));
+                        
+                    
+                        
+                    }
                 }
-            break;
+            }
+
+
+        break;
         }
 
+        // 윤성우 방법 시작
+        int recv_len1 = 0; 
+        while(recv_len1 < read_size)
+        {
+            recv_cnt2 = read(sending_peer_sock, &content[recv_len1], read_size - recv_len1);
+
+            if(recv_cnt2 == -1)
+                error_handling("read() error!");
+
+            recv_len1 += recv_cnt2; 
+        }
+
+        read_cnt = fwrite(content, 1, read_size, fp); 
+        total_bytes += read_cnt;
+        printf("%d / %d\n", total_bytes, file_inf.size);
+
         // 연결된 모든 리시빙 피어들에게 데이터 전송
-        for (int i = 0; i < MAX_PEERS; i++) {
+         for (int i = 0; i < MAX_PEERS; i++) 
+        {
             
             if (my_id == 1) {
                 // 리시빙 피어 1의 경우, peer_socks로만 데이터를 전송
                 if (peer_socks[i] != -1) {
+                    printf("my_id: 1, peer_socks[%d]\n",i);
                     write(peer_socks[i], &read_size, sizeof(int));
                     
                     write(peer_socks[i], content, read_size);
@@ -780,6 +778,7 @@ void *receiver_from_sending_peer(void *arg) {
                 // 리시빙 피어 2와 3의 경우, client_socks로 데이터를 전송
                 for (int j = 0; j < my_id - 1; j++) {
                     if (r_client_socks[j] != -1) {
+                        printf("my id:2 and 3, r_client_socks[%d]\n",j);
                         write(r_client_socks[j], &read_size, sizeof(int));
                        
                         write(r_client_socks[j], content, read_size);
@@ -789,6 +788,7 @@ void *receiver_from_sending_peer(void *arg) {
                     
                 // 리시빙 피어 2의 경우, peer_socks로도 데이터를 전송
                 if (my_id == 2 && peer_socks[i] != -1) {
+                    printf("my_id :2, peer_socks[%d]\n",i);
                     write(peer_socks[i], &read_size, sizeof(int));
                     
                     write(peer_socks[i], content, read_size);
@@ -796,26 +796,27 @@ void *receiver_from_sending_peer(void *arg) {
                 }
             }
         }
-
-        
     }
 
-fclose(fp);
-printf("Download complete\n");
+    fclose(fp);
+    printf("Download complete\n");
 
-pthread_exit(NULL);
-
+    return NULL; // 함수가 void* 타입을 반환하므로 NULL 반환
 }
+
 void *receiver_from_peer2(void *arg) {
 
     ReceiverPeerArgs *args = (ReceiverPeerArgs *)arg;
     int my_id = args->my_id;
-    //int* client_socks = args->client_socks;
-    //int* peer_socks = args->peer_socks;
     FileInfo file_inf = args->file_inf;
 
     FILE *fp;
-    fp = fopen("test2.mp4", "wb");
+    
+    // my_id 값에 따른 파일명 결정
+    char filename[20];
+    sprintf(filename, "test%d_%d.mp4", my_id,my_id);
+    
+    fp = fopen(filename, "wb");
     if (fp == NULL) {
         perror("Failed to open file");
         pthread_exit(NULL);
@@ -830,11 +831,11 @@ void *receiver_from_peer2(void *arg) {
         int terminate = 0;  // -1 수신 여부를 확인하기 위해 사용
 
         if (my_id == 1) {
-            read(peer_socks[0], &read_size, sizeof(int));  // my_id가 1일 경우 peer_socks[0]에서만 읽음
+            read(peer_socks[0], &read_size, sizeof(int));
         } else if (my_id == 2) {
-            read(peer_socks[0], &read_size, sizeof(int));  // my_id가 2일 경우 peer_socks[0]에서만 읽음
+            read(peer_socks[0], &read_size, sizeof(int));
         } else if (my_id == 3) {
-            read(r_client_socks[0], &read_size, sizeof(int));  // my_id가 3일 경우 client_socks[0]에서만 읽음
+            read(r_client_socks[0], &read_size, sizeof(int));
         }
 
         if (read_size == -1) {  // -1을 수신한 경우 루프를 종료
@@ -858,14 +859,13 @@ void *receiver_from_peer2(void *arg) {
             recv_len += recv_cnt;
         }
 
-        // test2.mp4 파일에 쓰기
         int write_cnt = fwrite(content, 1, read_size, fp); 
         total_bytes += write_cnt;
         printf("%d / %d (2nd Thread)\n", total_bytes, file_inf.size);
     }
 
     fclose(fp);
-    printf("Download to test2.mp4 complete\n");
+    printf("Download to %s complete\n", filename);
 
     pthread_exit(NULL);
 }
@@ -877,8 +877,13 @@ void *receiver_from_peer3(void *arg) {
     //int* peer_socks = args->peer_socks;
     FileInfo file_inf = args->file_inf;
 
-    FILE *fp;
-    fp = fopen("test3.mp4", "wb");
+     FILE *fp;
+    
+    // my_id 값에 따른 파일명 결정
+    char filename[20];
+    sprintf(filename, "test%d_%d_%d.mp4", my_id,my_id,my_id);
+    
+    fp = fopen(filename, "wb");
     if (fp == NULL) {
         perror("Failed to open file");
         pthread_exit(NULL);
@@ -932,94 +937,6 @@ void *receiver_from_peer3(void *arg) {
 
     pthread_exit(NULL);
 }
-
-
-// void *receiver_from_peer2(void *arg) {
-    
-//     ReceiverPeerArgs *args = (ReceiverPeerArgs *)arg;
-//     int my_id = args->my_id;
-//     int* client_socks = args->client_socks;
-//     int* peer_socks = args->peer_socks;
-//     FileInfo file_inf = args->file_inf;
-
-//     FILE *fp;
-//     fp = fopen("test3.mp4", "wb");
-//     if (fp == NULL) {
-//         perror("Failed to open file");
-//         pthread_exit(NULL);
-//     }
-
-//     int total_bytes = 0;
-//     char content[MY_SEGMENT];
-//     int read_size;
-//     int recv_cnt;
-    
-//     while (1) {
-//         // 리시빙 피어 1은 peer_socks로만 데이터를 받음
-//         if (my_id == 1) {
-//             for (int i = 0; i < MAX_PEERS; i++) {
-//                 if (peer_socks[i] != -1) {
-//                     read(peer_socks[i], &read_size, sizeof(int));
-//                     int recv_len = 0;
-//                     while (recv_len < read_size) {
-//                         recv_cnt = read(peer_socks[i], &content[recv_len], read_size - recv_len);
-//                         if (recv_cnt <= 0) {
-//                             perror("read() error");
-//                             pthread_exit(NULL);
-//                         }
-//                         recv_len += recv_cnt; 
-//                     }
-//                 }
-//             }
-//         } else {
-//             // 리시빙 피어 2와 3은 client_socks로 데이터를 받음
-//             for (int j = 0; j < my_id - 1; j++) {
-//                 if (client_socks[j] != -1) {
-//                     read(client_socks[j], &read_size, sizeof(int));
-//                     int recv_len = 0;
-//                     while (recv_len < read_size) {
-//                         recv_cnt = read(client_socks[j], &content[recv_len], read_size - recv_len);
-//                         if (recv_cnt <= 0) {
-//                             perror("read() error");
-//                             pthread_exit(NULL);
-//                         }
-//                         recv_len += recv_cnt; 
-//                     }
-//                 }
-//             }
-
-//             // 리시빙 피어 2는 peer_socks로도 데이터를 받음
-//             if (my_id == 2) {
-//                 for (int i = 0; i < MAX_PEERS; i++) {
-//                     if (peer_socks[i] != -1) {
-//                         read(peer_socks[i], &read_size, sizeof(int));
-//                         int recv_len = 0;
-//                         while (recv_len < read_size) {
-//                             recv_cnt = read(peer_socks[i], &content[recv_len], read_size - recv_len);
-//                             if (recv_cnt <= 0) {
-//                                 perror("read() error");
-//                                 pthread_exit(NULL);
-//                             }
-//                             recv_len += recv_cnt; 
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-
-//         // test3.mp4 파일에 쓰기
-//         int read_cnt = fwrite(content, 1, read_size, fp); 
-//         total_bytes += read_cnt;
-//         printf("%d / %d (3rd Thread)\n", total_bytes, file_inf.size);
-//     }
-
-//     fclose(fp);
-//     printf("Download to test3.mp4 complete\n");
-
-//     pthread_exit(NULL);
-// }
-
-
 
 void error_handling(char *message) {
     fputs(message, stderr);
