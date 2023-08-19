@@ -534,6 +534,9 @@ int main(int argc, char *argv[])
             printf("sizeof(file_int) : %ld\n", sizeof(file_inf));
             printf("File: %s (%d bytes)\n", file_inf.name, file_inf.size);
 
+
+        if(my_id==1)
+        {
             FILE *fp;
             fp =fopen("test.mp4","wb");
             int read_file_size;
@@ -581,6 +584,110 @@ int main(int argc, char *argv[])
             }
         fclose(fp);
         printf("Download complete\n");
+
+        }
+
+        if(my_id ==2)
+        {
+             FILE *fp;
+            fp =fopen("test2.mp4","wb");
+            int read_file_size;
+            int total_bytes = 0;
+            
+            char content[MY_SEGMENT];
+            int read_size;
+            int recv_cnt2;
+            int read_cnt;
+
+            
+            while(1)
+            {
+                //memset(&content,0,MY_SEGMENT); 
+                //memset(&read_size,0,sizeof(int));
+               
+                read(sending_peer_sock, &read_size, sizeof(int)); //int받을땐 굳이 윤성우 방법 안써도 됨.
+
+                if(read_size == -1)
+                {
+                    break;
+                }
+
+                //윤성우 방법 시작
+                int recv_len1=0; //받은 양
+                while(recv_len1<read_size)
+                {
+                    recv_cnt2=read(sending_peer_sock,&content[recv_len1],read_size-recv_len1);
+                    
+                
+                 
+                    if(recv_cnt2 == -1)
+                    error_handling("read() error!");
+                    recv_len1+=recv_cnt2; 
+                }
+                
+                
+
+
+                read_cnt = fwrite(content,1,read_size,fp); 
+                total_bytes +=read_cnt;
+                printf("%d / %d\n", total_bytes, file_inf.size);
+               
+
+            }
+        fclose(fp);
+        printf("Download complete\n");
+        }
+
+        if(my_id ==3)
+        {
+             FILE *fp;
+            fp =fopen("test3.mp4","wb");
+            int read_file_size;
+            int total_bytes = 0;
+            
+            char content[MY_SEGMENT];
+            int read_size;
+            int recv_cnt2;
+            int read_cnt;
+
+            
+            while(1)
+            {
+                //memset(&content,0,MY_SEGMENT); 
+                //memset(&read_size,0,sizeof(int));
+               
+                read(sending_peer_sock, &read_size, sizeof(int)); //int받을땐 굳이 윤성우 방법 안써도 됨.
+
+                if(read_size == -1)
+                {
+                    break;
+                }
+
+                //윤성우 방법 시작
+                int recv_len1=0; //받은 양
+                while(recv_len1<read_size)
+                {
+                    recv_cnt2=read(sending_peer_sock,&content[recv_len1],read_size-recv_len1);
+                    
+                
+                 
+                    if(recv_cnt2 == -1)
+                    error_handling("read() error!");
+                    recv_len1+=recv_cnt2; 
+                }
+                
+                
+
+
+                read_cnt = fwrite(content,1,read_size,fp); 
+                total_bytes +=read_cnt;
+                printf("%d / %d\n", total_bytes, file_inf.size);
+               
+
+            }
+        fclose(fp);
+        printf("Download complete\n");
+        }
             
 
         
