@@ -579,6 +579,7 @@ int main(int argc, char *argv[])
                 return -1;
              }
         // 필요한 경우, 메인 쓰레드에서 생성된 쓰레드가 종료될 때까지 기다립니다.
+        sleep(3);
         pthread_join(thread_id, NULL);
         pthread_join(t2, NULL);
         pthread_join(t3, NULL);
