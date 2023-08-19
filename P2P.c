@@ -23,6 +23,10 @@ typedef struct
     int id; // 해당 리시빙 피어의 번호
 } pkt;
 typedef struct {
+    pkt *peers_info;
+    char port[5];
+} ThreadArgs;
+typedef struct {
     int listen_sock;
     int my_id;
 } AcceptThreadArgs;
@@ -457,21 +461,22 @@ int main(int argc, char *argv[])
             printf("Received Peer Information: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
         }
 
-       pthread_t connect_thread;
-        // 마지막 피어는 다른 연결을 시도하지 않습니다.
+        pthread_t connect_thread;
         if (num_peers != 0)
         {
-            pkt *peers_data = malloc(sizeof(pkt) * (num_peers));
-            memcpy(peers_data, peers_info, sizeof(pkt) * (num_peers));
-
-           
-            if (pthread_create(&connect_thread, NULL, connectToOtherPeers, (void *)peers_data) != 0)
+            ThreadArgs *args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
+            args->peers_info = malloc(sizeof(pkt) * num_peers);
+            memcpy(args->peers_info, peers_info, sizeof(pkt) * num_peers);
+            strncpy(args->port, port, 5);
+                
+            if (pthread_create(&connect_thread, NULL, connectToOtherPeers, args) != 0)
             {
                 perror("Failed to create connect thread");
                 exit(EXIT_FAILURE);
             }
             pthread_join(connect_thread, NULL);
         }
+
         
             pthread_join(accept_thread, NULL);
 
@@ -588,7 +593,27 @@ int main(int argc, char *argv[])
 
             combine_files(MY_SEGMENT,"newtest.mp4",files,sizeof(files)/sizeof(files[0]));
 
-        }    
+        }
+        if(my_id==2)
+        {   
+             const char* files[] = {
+                "test2_2_2.mp4",
+                "test2.mp4",
+                "test2_2.mp4"
+            };
+
+            combine_files(MY_SEGMENT,"newtest2.mp4",files,sizeof(files)/sizeof(files[0]));
+
+        }
+         if(my_id==3)
+        {   
+             const char* files[] = {
+                "test3_3_3.mp4",
+                "test3_3.mp4",
+                "test3.mp4"
+            };
+            combine_files(MY_SEGMENT,"newtest3.mp4",files,sizeof(files)/sizeof(files[0]));
+        }      
         return 0;
             
     }
@@ -626,11 +651,13 @@ void* acceptThreadFunc(void* arg) {
                 perror("accept");
                 continue;
             }
-
+            int received_port_num;
+            read(client_sock, &received_port_num, sizeof(received_port_num));
          
 
             r_client_socks[num_clients] = client_sock;
             printf("succeed accept %d at index %d\n", client_sock, num_clients);
+            printf("accepted client's port : %d\n",received_port_num);
             num_clients++;
 
             // my_id 값을 기반으로 반복문 탈출 조건 추가
@@ -646,7 +673,9 @@ void* acceptThreadFunc(void* arg) {
 void *connectToOtherPeers(void *data)
 {
     
-    pkt *peers_info = (pkt *)data;
+    ThreadArgs *args = (ThreadArgs *)data;
+    pkt *peers_info = args->peers_info;
+    char *thread_port = args->port;  // 이렇게 가져옵니다.
     
     for (int i = 0; i <malloc_usable_size(peers_info)/sizeof(pkt) ; i++)
     {
@@ -678,6 +707,9 @@ void *connectToOtherPeers(void *data)
             }
 
             printf("Connected to Peer: IP %s, Port %s, ID %d\n", peers_info[i].ip, peers_info[i].port, peers_info[i].id);
+            int port_num =atoi(thread_port);
+            write(peer_sock,&port_num,sizeof(port_num));
+
             // 연결된 소켓 디스크립터 저장
             peer_socks[i] = peer_sock;
             //close(peer_sock);
@@ -897,7 +929,7 @@ void *receiver_from_peer2(void *arg) {
     fclose(fp);
     printf("Download to %s complete\n", filename);
 
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
 }
 void *receiver_from_peer3(void *arg) {
 
@@ -966,9 +998,9 @@ void *receiver_from_peer3(void *arg) {
     }
 
     fclose(fp);
-    printf("Download to test3.mp4 complete\n");
+     printf("Download to %s complete\n", filename);
 
-    pthread_exit(NULL);
+   // pthread_exit(NULL);
 }
 
 void combine_files(size_t segment_size, const char* output_file, const char** input_files, size_t num_files) {
