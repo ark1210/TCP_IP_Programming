@@ -593,6 +593,7 @@ int main(int argc, char *argv[])
             };
 
             combine_files(MY_SEGMENT,"newtest.mp4",files,sizeof(files)/sizeof(files[0]));
+            printf("Creating the newtest.mp4 successfully");
 
         }
         if(my_id==2)
@@ -604,6 +605,7 @@ int main(int argc, char *argv[])
             };
 
             combine_files(MY_SEGMENT,"newtest2.mp4",files,sizeof(files)/sizeof(files[0]));
+            printf("Creating the newtest2.mp4 successfully");
 
         }
          if(my_id==3)
@@ -614,6 +616,7 @@ int main(int argc, char *argv[])
                 "test3.mp4"
             };
             combine_files(MY_SEGMENT,"newtest3.mp4",files,sizeof(files)/sizeof(files[0]));
+            printf("Creating the newtest3.mp4 successfully");
         }      
         return 0;
             
@@ -808,7 +811,7 @@ void* receiver_from_sending_peer(void *arg)
 
         read_cnt = fwrite(content, 1, read_size, fp); 
         total_bytes += read_cnt;
-        printf("%d / %d\n", total_bytes, file_inf.size);
+        printf("%d / %d (1nd Thread)\n", total_bytes, file_inf.size);
 
      
         // 연결된 모든 리시빙 피어들에게 데이터 전송
@@ -923,8 +926,8 @@ void *receiver_from_peer2(void *arg) {
         }
 
         int write_cnt = fwrite(content, 1, read_size, fp); 
-        //total_bytes += write_cnt;
-        //printf("%d / %d (2nd Thread)\n", total_bytes, file_inf.size);
+        total_bytes += write_cnt;
+        printf("%d / %d (2nd Thread)\n", total_bytes, file_inf.size);
     }
 
     fclose(fp);
@@ -994,8 +997,8 @@ void *receiver_from_peer3(void *arg) {
 
         // test3.mp4 파일에 쓰기
         int write_cnt = fwrite(content, 1, read_size, fp); 
-       // total_bytes += write_cnt;
-       // printf("%d / %d (3rd Thread)\n", total_bytes, file_inf.size);
+        total_bytes += write_cnt;
+       ("%d / %d (3rd Thread)\n", total_bytes, file_inf.size);
     }
 
     fclose(fp);
